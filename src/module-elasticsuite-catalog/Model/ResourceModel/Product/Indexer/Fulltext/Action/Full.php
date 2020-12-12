@@ -2,22 +2,26 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Indexer\Fulltext\Action;
 
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Indexer;
+use Magento\Store\Model\StoreManagerInterface;
+use Magento\Framework\EntityManager\MetadataPool;
+use Magento\Framework\ObjectManagerInterface;
+use Magento\Framework\App\ResourceConnection;
 
 /**
- * ElasticSearch product full indexer resource model.
+ * Elasticsearch product full indexer resource model.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
@@ -25,6 +29,29 @@ use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Indexer;
  */
 class Full extends Indexer
 {
+    /**
+     * @var ObjectManagerInterface
+     */
+    private $objectManager;
+
+    /**
+     * Indexer constructor.
+     *
+     * @param ResourceConnection     $resource      Resource Connection
+     * @param StoreManagerInterface  $storeManager  Store Manager
+     * @param MetadataPool           $metadataPool  Metadata Pool
+     * @param ObjectManagerInterface $objectManager Object Manager
+     */
+    public function __construct(
+        ResourceConnection $resource,
+        StoreManagerInterface $storeManager,
+        MetadataPool $metadataPool,
+        ObjectManagerInterface $objectManager
+    ) {
+        parent::__construct($resource, $storeManager, $metadataPool);
+        $this->objectManager = $objectManager;
+    }
+
     /**
      * Load a bulk of product data.
      *
@@ -35,7 +62,7 @@ class Full extends Indexer
      *
      * @return array
      */
-    public function getSearchableProducts($storeId, $productIds = null, $fromId = 0, $limit = 100)
+    public function getSearchableProducts($storeId, $productIds = null, $fromId = 0, $limit = 1000)
     {
         $select = $this->getConnection()->select()
             ->from(['e' => $this->getTable('catalog_product_entity')]);
@@ -46,9 +73,9 @@ class Full extends Indexer
             $select->where('e.entity_id IN (?)', $productIds);
         }
 
-        $select->where('e.entity_id > ?', $fromId)
-            ->limit($limit)
-            ->order('e.entity_id');
+        $select->limit($limit);
+        $select->where('e.entity_id > ?', $fromId);
+        $select->order('e.entity_id');
 
         return $this->connection->fetchAll($select);
     }
@@ -62,9 +89,15 @@ class Full extends Indexer
      */
     public function getRelationsByChild($childrenIds)
     {
+        $metadata      = $this->getEntityMetaData(\Magento\Catalog\Api\Data\ProductInterface::class);
+        $entityTable   = $this->getTable($metadata->getEntityTable());
+        $relationTable = $this->getTable('catalog_product_relation');
+        $joinCondition = sprintf('relation.parent_id = entity.%s', $metadata->getLinkField());
+
         $select = $this->getConnection()->select()
-            ->from($this->resource->getTableName('catalog_product_relation'), 'parent_id')
-            ->where('child_id IN(?)', $childrenIds);
+            ->from(['relation' => $relationTable], [])
+            ->join(['entity' => $entityTable], $joinCondition, [$metadata->getIdentifierField()])
+            ->where('child_id IN(?)', array_map('intval', $childrenIds));
 
         return $this->getConnection()->fetchCol($select);
     }
@@ -89,7 +122,7 @@ class Full extends Indexer
     private function addIsVisibleInStoreFilter($select, $storeId)
     {
         $rootCategoryId = $this->getRootCategoryId($storeId);
-        $indexTable = $this->getTable('catalog_category_product_index');
+        $indexTable     = $this->getCategoryProductIndexTable($storeId);
 
         $visibilityJoinCond = $this->getConnection()->quoteInto(
             'visibility.product_id = e.entity_id AND visibility.store_id = ?',
@@ -98,8 +131,31 @@ class Full extends Indexer
 
         $select->useStraightJoin(true)
             ->join(['visibility' => $indexTable], $visibilityJoinCond, ['visibility'])
-            ->where('visibility.category_id = ?', $rootCategoryId);
+            ->where('visibility.category_id = ?', (int) $rootCategoryId);
 
         return $this;
+    }
+
+    /**
+     * Retrieve category/product index table.
+     *
+     * @param int $storeId The store Id
+     *
+     * @return string
+     */
+    private function getCategoryProductIndexTable($storeId)
+    {
+        // Init table name as legacy table name.
+        $indexTable = $this->getTable('catalog_category_product_index');
+
+        try {
+            // Retrieve table name for the current store Id from the TableMaintainer.
+            $tableMaintainer = $this->objectManager->get(\Magento\Catalog\Model\Indexer\Category\Product\TableMaintainer::class);
+            $indexTable      = $tableMaintainer->getMainTable($storeId);
+        } catch (\Exception $exception) {
+            // Occurs in Magento version where TableMaintainer is not implemented. Will default to legacy table.
+        }
+
+        return $indexTable;
     }
 }

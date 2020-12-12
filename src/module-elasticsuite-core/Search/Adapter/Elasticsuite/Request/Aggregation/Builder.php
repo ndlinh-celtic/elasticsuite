@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -16,7 +16,6 @@ namespace Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation
 
 use Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Query\Builder as QueryBuilder;
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
-use Magento\Framework\ObjectManagerInterface;
 
 /**
  *
@@ -32,30 +31,31 @@ class Builder
     private $queryBuilder;
 
     /**
-     * @var ObjectManagerInterface
+     * @var BuilderInterface[]
      */
-    private $objectManager;
+    private $builders;
 
     /**
-     * @var array
+     * @var PipelineBuilderInterface[]
      */
-    private $bucketBuilderClasses = [
-        BucketInterface::TYPE_TERM        => 'Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation\Builder\Term',
-        BucketInterface::TYPE_HISTOGRAM   => 'Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation\Builder\Histogram',
-        BucketInterface::TYPE_QUERY_GROUP => 'Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation\Builder\QueryGroup',
-    ];
-
+    private $pipelineBuilders;
 
     /**
      * Constructor.
      *
-     * @param ObjectManager $objectManager Object manager instance.
-     * @param QueryBuilder  $queryBuilder  Query builder used to build queries inside sort orders.
+     * @param QueryBuilder               $queryBuilder     Query builder used to build
+     *                                                     Queries inside sort orders.
+     * @param BuilderInterface[]         $builders         Aggregation builder implementations
+     * @param PipelineBuilderInterface[] $pipelineBuilders Pipeline aggregation builder implementations
      */
-    public function __construct(ObjectManagerInterface $objectManager, QueryBuilder $queryBuilder)
-    {
-        $this->objectManager = $objectManager;
-        $this->queryBuilder  = $queryBuilder;
+    public function __construct(
+        QueryBuilder $queryBuilder,
+        array $builders = [],
+        array $pipelineBuilders = []
+    ) {
+        $this->queryBuilder = $queryBuilder;
+        $this->builders     = $builders;
+        $this->pipelineBuilders = $pipelineBuilders;
     }
 
     /**
@@ -72,7 +72,28 @@ class Builder
         foreach ($buckets as $bucket) {
             $bucketType = $bucket->getType();
             $builder    = $this->getBuilder($bucketType);
-            $aggregation = $builder->buildBucket($bucket);
+            $aggregation     = $builder->buildBucket($bucket);
+            $subAggregations = $aggregation['aggregations'] ?? [];
+
+            if (!empty($bucket->getChildBuckets())) {
+                $subAggregations = array_merge($subAggregations, $this->buildAggregations($bucket->getChildBuckets()));
+            }
+
+            foreach ($bucket->getMetrics() as $metric) {
+                $metricDefinition = array_merge(['field' => $metric->getField()], $metric->getConfig() ?? []);
+                $subAggregations[$metric->getName()] = [$metric->getType() => $metricDefinition];
+            }
+
+            foreach ($bucket->getPipelines() as $pipeline) {
+                $pipelineType    = $pipeline->getType();
+                $pipelineBuilder = $this->getPipelineBuilder($pipelineType);
+                $pipelineAgg     = $pipelineBuilder->buildPipeline($pipeline);
+                $subAggregations[$pipeline->getName()] = $pipelineAgg;
+            }
+
+            if (!empty($subAggregations)) {
+                $aggregation['aggregations'] = $subAggregations;
+            }
 
             if ($bucket->isNested()) {
                 if ($bucket->getNestedFilter()) {
@@ -106,15 +127,30 @@ class Builder
      *
      * @param string $bucketType Bucket type to be built.
      *
-     * @return object
+     * @return BuilderInterface
      */
     private function getBuilder($bucketType)
     {
-        if (isset($this->bucketBuilderClasses[$bucketType])) {
-            $builderClass = $this->bucketBuilderClasses[$bucketType];
-            $builder = $this->objectManager->get($builderClass, ['builder' => $this]);
+        if (!isset($this->builders[$bucketType])) {
+            throw new \InvalidArgumentException("No builder found for aggregation type {$bucketType}.");
         }
 
-        return $builder;
+        return $this->builders[$bucketType];
+    }
+
+    /**
+     * Retrieve the builder used to convert a pipeline into an ES aggregation.
+     *
+     * @param string $pipelineType Pipeline type to be built.
+     *
+     * @return PipelineBuilderInterface
+     */
+    private function getPipelineBuilder($pipelineType)
+    {
+        if (!isset($this->pipelineBuilders[$pipelineType])) {
+            throw new \InvalidArgumentException("No builder found for pipeline aggregation type {$pipelineType}.");
+        }
+
+        return $this->pipelineBuilders[$pipelineType];
     }
 }

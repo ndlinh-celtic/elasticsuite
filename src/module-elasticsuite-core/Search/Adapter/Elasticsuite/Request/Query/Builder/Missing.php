@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -31,6 +31,16 @@ class Missing implements BuilderInterface
      */
     public function buildQuery(QueryInterface $query)
     {
-        return ['missing' => ['field' => $query->getField()]];
+        if ($query->getType() !== QueryInterface::TYPE_MISSING) {
+            throw new \InvalidArgumentException("Query builder : invalid query type {$query->getType()}");
+        }
+
+        $searchQuery = ['bool' => ['must_not' => ['exists' => ['field' => $query->getField()]]]];
+
+        if ($query->getName()) {
+            $searchQuery['bool']['_name'] = $query->getName();
+        }
+
+        return $searchQuery;
     }
 }

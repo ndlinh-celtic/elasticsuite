@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -70,10 +70,13 @@ class Mapper
     public function buildSearchRequest(RequestInterface $request)
     {
         $searchRequest = [
-            'from'         => $request->getFrom(),
-            'size'         => $request->getSize(),
-            'sort'         => $this->getSortOrders($request),
+            'size' => $request->getSize(),
         ];
+
+        if ($searchRequest['size'] > 0) {
+            $searchRequest['sort'] = $this->getSortOrders($request);
+            $searchRequest['from'] = $request->getFrom();
+        }
 
         $query = $this->getRootQuery($request);
         if ($query) {
@@ -81,15 +84,16 @@ class Mapper
         }
 
         $filter = $this->getRootFilter($request);
-
         if ($filter) {
-            $searchRequest['filter'] = $filter;
+            $searchRequest['post_filter'] = $filter;
         }
 
         $aggregations = $this->getAggregations($request);
         if (!empty($aggregations)) {
             $searchRequest['aggregations'] = $aggregations;
         }
+
+        $searchRequest['track_total_hits'] = $request->getTrackTotalHits();
 
         return $searchRequest;
     }
@@ -104,13 +108,7 @@ class Mapper
      */
     private function getRootQuery(RequestInterface $request)
     {
-        $query = null;
-
-        if ($request->getQuery()) {
-            $query = $this->queryBuilder->buildQuery($request->getQuery());
-        }
-
-        return $query;
+        return $this->queryBuilder->buildQuery($request->getQuery());
     }
 
     /**

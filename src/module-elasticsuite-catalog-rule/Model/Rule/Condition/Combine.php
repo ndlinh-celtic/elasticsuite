@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalogRule
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalogRule\Model\Rule\Condition;
@@ -116,8 +115,8 @@ class Combine extends \Magento\Rule\Model\Condition\Combine
                     $condition->setRule($this->getRule());
                     $this->addCondition($condition);
                     $condition->loadArray($conditionArr, $key);
-                } catch (\Exception $e) {
-                    $this->_logger->critical($e);
+                } catch (\Exception $exception) {
+                    $this->_logger->critical($exception);
                 }
             }
         }

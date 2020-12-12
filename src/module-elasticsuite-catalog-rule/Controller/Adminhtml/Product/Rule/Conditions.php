@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalogRule
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -33,7 +32,7 @@ class Conditions extends Action
     protected $ruleFactory;
 
     /**
-     * @var arrray
+     * @var array
      */
     private $acls = [];
 
@@ -80,6 +79,7 @@ class Conditions extends Action
         $result = '';
         if ($model instanceof AbstractCondition) {
             $model->setJsFormObject($this->getRequest()->getParam('form'));
+            $model->setData('url_params', $this->getRequest()->getParams());
             $result = $model->asHtmlRecursive();
         }
         $this->getResponse()->setBody($result);

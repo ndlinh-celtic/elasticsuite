@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Block\Adminhtml\Search\Request\RelevanceConfig;
@@ -19,6 +20,7 @@ use Magento\Config\Model\Config\Structure\Element\Field;
 use Magento\Framework\Data\FormFactory;
 use Magento\Framework\Registry;
 use Smile\ElasticsuiteCore\Api\Search\Request\ContainerScopeInterface;
+use Smile\ElasticsuiteCore\Search\Request\RelevanceConfig\App\Config as RelevanceConfig;
 
 /**
  * Relevance configuration edit form
@@ -30,6 +32,11 @@ use Smile\ElasticsuiteCore\Api\Search\Request\ContainerScopeInterface;
 class Form extends \Magento\Config\Block\System\Config\Form
 {
     /**
+     * @var RelevanceConfig
+     */
+    private $relevanceConfig;
+
+    /**
      * Form constructor.
      *
      * @param \Magento\Backend\Block\Template\Context                   $context         Application Context
@@ -39,6 +46,7 @@ class Form extends \Magento\Config\Block\System\Config\Form
      * @param Structure                                                 $configStructure Configuration Structure
      * @param \Magento\Config\Block\System\Config\Form\Fieldset\Factory $fieldsetFactory Fieldset Factory
      * @param \Magento\Config\Block\System\Config\Form\Field\Factory    $fieldFactory    Field Factory
+     * @param RelevanceConfig                                           $relevanceConfig Relevance Configuration
      * @param array                                                     $data            Object Data
      */
     public function __construct(
@@ -49,6 +57,7 @@ class Form extends \Magento\Config\Block\System\Config\Form
         Structure $configStructure,
         \Magento\Config\Block\System\Config\Form\Fieldset\Factory $fieldsetFactory,
         \Magento\Config\Block\System\Config\Form\Field\Factory $fieldFactory,
+        RelevanceConfig $relevanceConfig,
         array $data = []
     ) {
 
@@ -63,6 +72,7 @@ class Form extends \Magento\Config\Block\System\Config\Form
             $data
         );
 
+        $this->relevanceConfig = $relevanceConfig;
         $this->_scopeLabels = [
             ContainerScopeInterface::SCOPE_DEFAULT          => __('[GLOBAL]'),
             ContainerScopeInterface::SCOPE_CONTAINERS       => __('[CONTAINER]'),
@@ -147,7 +157,7 @@ class Form extends \Magento\Config\Block\System\Config\Form
      */
     public function getConfigValue($path)
     {
-        return $this->_scopeConfig->getValue($path, $this->getScope(), $this->getScopeCode());
+        return $this->relevanceConfig->getValue($path, $this->getScope(), $this->getScopeCode());
     }
 
     /**

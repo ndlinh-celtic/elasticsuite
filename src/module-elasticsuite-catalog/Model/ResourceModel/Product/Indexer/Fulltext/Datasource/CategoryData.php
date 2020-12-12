@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -20,9 +21,12 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\EntityManager\MetadataPool;
 use Magento\Store\Model\StoreManagerInterface;
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Indexer;
+use Magento\Framework\ObjectManagerInterface;
 
 /**
  * Categories data datasource resource model.
+ *
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
@@ -51,20 +55,28 @@ class CategoryData extends Indexer
     private $eavConfig = null;
 
     /**
+     * @var ObjectManagerInterface
+     */
+    private $objectManager;
+
+    /**
      * CategoryData constructor.
      *
-     * @param \Magento\Framework\App\ResourceConnection     $resource     Connection Resource
-     * @param \Magento\Store\Model\StoreManagerInterface    $storeManager The store manager
-     * @param \Magento\Framework\EntityManager\MetadataPool $metadataPool Metadata Pool
-     * @param \Magento\Eav\Model\Config                     $eavConfig    EAV Configuration
+     * @param ResourceConnection     $resource      Connection Resource.
+     * @param StoreManagerInterface  $storeManager  The store manager.
+     * @param MetadataPool           $metadataPool  Metadata Pool.
+     * @param Config                 $eavConfig     EAV Configuration.
+     * @param ObjectManagerInterface $objectManager Object manager.
      */
     public function __construct(
         ResourceConnection $resource,
         StoreManagerInterface $storeManager,
         MetadataPool $metadataPool,
-        Config $eavConfig
+        Config $eavConfig,
+        ObjectManagerInterface $objectManager
     ) {
-        $this->eavConfig = $eavConfig;
+        $this->eavConfig     = $eavConfig;
+        $this->objectManager = $objectManager;
         parent::__construct($resource, $storeManager, $metadataPool);
     }
 
@@ -90,7 +102,10 @@ class CategoryData extends Indexer
         $storeCategoryName = $this->loadCategoryNames(array_unique($categoryIds), $storeId);
 
         foreach ($categoryData as &$categoryDataRow) {
-            $categoryDataRow['name'] = $storeCategoryName[(int) $categoryDataRow['category_id']];
+            $categoryDataRow['name'] = '';
+            if (isset($storeCategoryName[(int) $categoryDataRow['category_id']])) {
+                $categoryDataRow['name'] = $storeCategoryName[(int) $categoryDataRow['category_id']];
+            }
         }
 
         return $categoryData;
@@ -107,7 +122,7 @@ class CategoryData extends Indexer
     protected function getCategoryProductSelect($productIds, $storeId)
     {
         $select = $this->getConnection()->select()
-            ->from(['cpi' => $this->getTable('catalog_category_product_index')])
+            ->from(['cpi' => $this->getTable($this->getCategoryProductIndexTable($storeId))])
             ->where('cpi.store_id = ?', $storeId)
             ->where('cpi.product_id IN(?)', $productIds);
 
@@ -150,6 +165,29 @@ class CategoryData extends Indexer
     }
 
     /**
+     * Get category product index table name.
+     *
+     * @param integer $storeId Store id.
+     *
+     * @return string
+     */
+    protected function getCategoryProductIndexTable($storeId)
+    {
+        // Init table name as legacy table name.
+        $indexTable = $this->getTable('catalog_category_product_index');
+
+        try {
+            // Retrieve table name for the current store Id from the TableMaintainer.
+            $tableMaintainer = $this->objectManager->get(\Magento\Catalog\Model\Indexer\Category\Product\TableMaintainer::class);
+            $indexTable      = $tableMaintainer->getMainTable($storeId);
+        } catch (\Exception $exception) {
+            // Occurs in Magento version where TableMaintainer is not implemented. Will default to legacy table.
+        }
+
+        return $indexTable;
+    }
+
+    /**
      * Add some categories name into the cache of names of categories.
      *
      * @param array $categoryIds Ids of the categories to be added to the cache.
@@ -165,9 +203,10 @@ class CategoryData extends Indexer
             $loadCategoryIds = array_diff($categoryIds, array_keys($this->categoryNameCache[$storeId]));
         }
 
-        $loadCategoryIds = array_map('intval', $loadCategoryIds);
+        $loadCategoryIds  = array_map('intval', $loadCategoryIds);
+        $useNameAttribute = $this->getUseNameInSearchAttribute();
 
-        if (!empty($loadCategoryIds)) {
+        if (!empty($loadCategoryIds) && $useNameAttribute && $useNameAttribute->getId()) {
             $select = $this->prepareCategoryNameSelect($loadCategoryIds, $storeId);
             $entityIdField = $this->getEntityMetaData(CategoryInterface::class)->getIdentifierField();
 
@@ -202,12 +241,16 @@ class CategoryData extends Indexer
         $linkField     = $this->getEntityMetaData(CategoryInterface::class)->getLinkField();
         $select        = $this->connection->select();
 
-        $joinCondition = new \Zend_Db_Expr("cat.{$linkField} = default_value.{$linkField}");
+        $conditions    = [
+            "cat.{$linkField} = default_value.{$linkField}",
+            "default_value.store_id=0",
+            "default_value.attribute_id = " . (int) $nameAttr->getAttributeId(),
+        ];
+
+        $joinCondition = new \Zend_Db_Expr(implode(" AND ", $conditions));
         $select->from(['cat' => $this->getEntityMetaData(CategoryInterface::class)->getEntityTable()], [$entityIdField])
-            ->joinInner(['default_value' => $nameAttr->getBackendTable()], $joinCondition, [])
+            ->joinLeft(['default_value' => $nameAttr->getBackendTable()], $joinCondition, [])
             ->where("cat.$entityIdField != ?", $rootCategoryId)
-            ->where('default_value.store_id = ?', 0)
-            ->where('default_value.attribute_id = ?', (int) $nameAttr->getAttributeId())
             ->where("cat.$entityIdField IN (?)", $loadCategoryIds);
 
         // Join to check for use_name_in_product_search.
@@ -228,17 +271,17 @@ class CategoryData extends Indexer
 
         // Multi store additional join to get scoped name value.
         $joinStoreNameCond = sprintf(
-            "default_value.$linkField = store_value.$linkField" .
+            "cat.$linkField = store_value.$linkField" .
             " AND store_value.attribute_id = %d AND store_value.store_id = %d",
             (int) $nameAttr->getAttributeId(),
             (int) $storeId
         );
         $select->joinLeft(['store_value' => $nameAttr->getBackendTable()], $joinStoreNameCond, [])
-            ->columns(['name' => 'COALESCE(store_value.value,default_value.value)']);
+            ->columns(['name' => 'COALESCE(store_value.value,default_value.value, "")']);
 
         // Multi store additional join to get scoped "use_name_in_product_search" value.
         $joinUseNameStoreCond = sprintf(
-            "default_value.$linkField = use_name_store_value.$linkField" .
+            "cat.$linkField = use_name_store_value.$linkField" .
             " AND use_name_store_value.attribute_id = %d AND use_name_store_value.store_id = %d",
             (int) $useNameAttr->getAttributeId(),
             (int) $storeId

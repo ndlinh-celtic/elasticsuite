@@ -1,18 +1,17 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Layer\Filter;
-
-use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
 
 /**
  * Decimal filter model
@@ -40,18 +39,18 @@ class Decimal extends \Magento\CatalogSearch\Model\Layer\Filter\Decimal
     /**
      * Decimal constructor.
      *
-     * @param \Magento\Catalog\Model\Layer\Filter\ItemFactory                  $filterItemFactory    Filter item
-     *                                                                                               factory
-     * @param \Magento\Store\Model\StoreManagerInterface                       $storeManager         The Store Manager
-     * @param \Magento\Catalog\Model\Layer                                     $layer                The Layer
-     * @param \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder             $itemDataBuilder      The data builder
-     * @param \Magento\Catalog\Model\ResourceModel\Layer\Filter\DecimalFactory $filterDecimalFactory Factory for
-     *                                                                                               decimal items
-     * @param \Magento\Framework\Pricing\PriceCurrencyInterface                $priceCurrency        Price Currency
-     * @param \Magento\Catalog\Model\Layer\Filter\DataProvider\PriceFactory    $dataProviderFactory  Price DataProvider
-     *                                                                                               Factory
-     * @param \Magento\Framework\Locale\ResolverInterface                      $localeResolver       Locale Resolver
-     * @param array                                                            $data                 Filter Data
+     * @param \Magento\Catalog\Model\Layer\Filter\ItemFactory                           $filterItemFactory    Filter item
+     *                                                                                                        factory
+     * @param \Magento\Store\Model\StoreManagerInterface                                $storeManager         The Store Manager
+     * @param \Magento\Catalog\Model\Layer                                              $layer                The Layer
+     * @param \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder                      $itemDataBuilder      The data builder
+     * @param \Magento\Catalog\Model\ResourceModel\Layer\Filter\DecimalFactory          $filterDecimalFactory Factory for
+     *                                                                                                        decimal items
+     * @param \Magento\Framework\Pricing\PriceCurrencyInterface                         $priceCurrency        Price Currency
+     * @param \Smile\ElasticsuiteCatalog\Model\Layer\Filter\DataProvider\DecimalFactory $dataProviderFactory  Decimal DataProvider
+     *                                                                                                        Factory
+     * @param \Magento\Framework\Locale\ResolverInterface                               $localeResolver       Locale Resolver
+     * @param array                                                                     $data                 Filter Data
      */
     public function __construct(
         \Magento\Catalog\Model\Layer\Filter\ItemFactory $filterItemFactory,
@@ -60,7 +59,7 @@ class Decimal extends \Magento\CatalogSearch\Model\Layer\Filter\Decimal
         \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder $itemDataBuilder,
         \Magento\Catalog\Model\ResourceModel\Layer\Filter\DecimalFactory $filterDecimalFactory,
         \Magento\Framework\Pricing\PriceCurrencyInterface $priceCurrency,
-        \Magento\Catalog\Model\Layer\Filter\DataProvider\PriceFactory $dataProviderFactory,
+        \Smile\ElasticsuiteCatalog\Model\Layer\Filter\DataProvider\DecimalFactory $dataProviderFactory,
         \Magento\Framework\Locale\ResolverInterface $localeResolver,
         array $data
     ) {
@@ -75,21 +74,6 @@ class Decimal extends \Magento\CatalogSearch\Model\Layer\Filter\Decimal
         );
         $this->localeResolver = $localeResolver;
         $this->dataProvider   = $dataProviderFactory->create(['layer' => $this->getLayer()]);
-    }
-
-    /**
-     * Append the facet to the product collection.
-     *
-     * @return \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Attribute
-     */
-    public function addFacetToCollection()
-    {
-        $facetField = $this->getFilterField();
-        $facetType = BucketInterface::TYPE_HISTOGRAM;
-        $productCollection = $this->getLayer()->getProductCollection();
-        $productCollection->addFacet($facetField, $facetType, []);
-
-        return $this;
     }
 
     /**
@@ -111,6 +95,8 @@ class Decimal extends \Magento\CatalogSearch\Model\Layer\Filter\Decimal
 
     /**
      * Retrieve ES filter field.
+     *
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
      *
      * @return string
      */
@@ -144,5 +130,19 @@ class Decimal extends \Magento\CatalogSearch\Model\Layer\Filter\Decimal
         }
 
         return $value;
+    }
+
+    /**
+     * Create the proper query filter for price, according to current customer group Id.
+     *
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
+     *
+     * @param array $bounds The price bounds to apply
+     *
+     * @return array
+     */
+    private function getRangeCondition($bounds)
+    {
+        return $bounds;
     }
 }

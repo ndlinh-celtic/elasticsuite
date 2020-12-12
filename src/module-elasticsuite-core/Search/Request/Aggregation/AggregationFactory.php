@@ -2,20 +2,19 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Search\Request\Aggregation;
 
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
-use Magento\Framework\ObjectManagerInterface;
 
 /**
  * Factory for search request aggregation buckets.
@@ -52,7 +51,7 @@ class AggregationFactory
     public function create($bucketType, $bucketParams)
     {
         if (!isset($this->factories[$bucketType])) {
-            throw new \LogicException("No factory found for query of type {$bucketType}");
+            throw new \LogicException("No factory found for aggregation of type {$bucketType}");
         }
 
         return $this->factories[$bucketType]->create($bucketParams);

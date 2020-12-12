@@ -1,22 +1,27 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCatalog\Model\ResourceModel\Category\Indexer\Fulltext\Action;
 
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Indexer;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\EntityManager\MetadataPool;
+use Magento\Store\Model\StoreManagerInterface;
+use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory as CategoryCollectionFactory;
 
 /**
- * ElasticSearch category full indexer resource model.
+ * Elasticsearch category full indexer resource model.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
@@ -24,6 +29,29 @@ use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Indexer;
  */
 class Full extends Indexer
 {
+    /**
+     * @var \Magento\Catalog\Model\ResourceModel\Category\CollectionFactory
+     */
+    private $categoryCollectionFactory;
+
+    /**
+     * Constructor.
+     *
+     * @param ResourceConnection        $resource                  Resource connection.
+     * @param StoreManagerInterface     $storeManager              Store manager.
+     * @param MetadataPool              $metadataPool              Metadata pool.
+     * @param CategoryCollectionFactory $categoryCollectionFactory Category collection factory.
+     */
+    public function __construct(
+        ResourceConnection $resource,
+        StoreManagerInterface $storeManager,
+        MetadataPool $metadataPool,
+        CategoryCollectionFactory $categoryCollectionFactory
+    ) {
+        parent::__construct($resource, $storeManager, $metadataPool);
+        $this->categoryCollectionFactory = $categoryCollectionFactory;
+    }
+
     /**
      * Load a bulk of category data.
      *
@@ -34,10 +62,14 @@ class Full extends Indexer
      *
      * @return array
      */
-    public function getSearchableCategories($storeId, $categoryIds = null, $fromId = 0, $limit = 100)
+    public function getSearchableCategories($storeId, $categoryIds = null, $fromId = 0, $limit = 100): array
     {
-        $select = $this->getConnection()->select()
-            ->from(['e' => $this->getTable('catalog_category_entity')]);
+        /**
+         * @var \Magento\Catalog\Model\ResourceModel\Category\Collection $categoryCollection
+         */
+        $categoryCollection = $this->categoryCollectionFactory->create()->setStoreId($storeId);
+        $categoryCollection->addIsActiveFilter();
+        $select = $categoryCollection->getSelect();
 
         $this->addIsVisibleInStoreFilter($select, $storeId);
 
@@ -58,13 +90,13 @@ class Full extends Indexer
      * @param \Zend_Db_Select $select  Product select to be filtered.
      * @param integer         $storeId Store Id
      *
-     * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Indexer\Fulltext\Action\Full Self Reference
+     * @return Full Self Reference
      */
-    private function addIsVisibleInStoreFilter($select, $storeId)
+    private function addIsVisibleInStoreFilter($select, $storeId): Full
     {
         $rootCategoryId = $this->getRootCategoryId($storeId);
 
-        $select->where('e.path LIKE ?', "1/{$rootCategoryId}%");
+        $select->where('e.path LIKE ?', "1/{$rootCategoryId}/%");
 
         return $this;
     }

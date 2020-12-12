@@ -1,14 +1,14 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -25,7 +25,7 @@ use Smile\ElasticsuiteCore\Index\Indices\Config as IndicesConfig;
  *   - indices by identifier and related configuration
  *   - ...
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -34,7 +34,7 @@ class IndexSettings implements IndexSettingsInterface
     /**
      * @var string
      */
-    const FULL_REINDEX_REFRESH_INTERVAL = '10s';
+    const FULL_REINDEX_REFRESH_INTERVAL = '30s';
 
     /**
      * @var string
@@ -42,10 +42,29 @@ class IndexSettings implements IndexSettingsInterface
     const DIFF_REINDEX_REFRESH_INTERVAL = '1s';
 
     /**
+     * @var string
+     */
+    const FULL_REINDEX_TRANSLOG_DURABILITY = 'async';
+
+    /**
+     * @var string
+     */
+    const DIFF_REINDEX_TRANSLOG_DURABILITY = 'request';
+
+    /**
      * @var integer
      */
     const MERGE_FACTOR = 20;
 
+    /**
+     * @var integer
+     */
+    const CODEC = 'best_compression';
+
+    /**
+     * @var integer
+     */
+    const TOTAL_FIELD_LIMIT = 20000;
 
     /**
      * @var \Smile\ElasticsuiteCore\Helper\IndexSettings
@@ -111,10 +130,15 @@ class IndexSettings implements IndexSettingsInterface
     public function getCreateIndexSettings()
     {
         $settings = [
-            'number_of_replicas'        => 0,
-            'number_of_shards'          => $this->helper->getNumberOfShards(),
-            'refresh_interval'          => self::FULL_REINDEX_REFRESH_INTERVAL,
-            'merge.policy.merge_factor' => self::MERGE_FACTOR,
+            'requests.cache.enable'            => true,
+            'number_of_replicas'               => 0,
+            'number_of_shards'                 => $this->helper->getNumberOfShards(),
+            'refresh_interval'                 => self::FULL_REINDEX_REFRESH_INTERVAL,
+            'merge.scheduler.max_thread_count' => 1,
+            'translog.durability'              => self::FULL_REINDEX_TRANSLOG_DURABILITY,
+            'codec'                            => self::CODEC,
+            'max_result_window'                => $this->helper->getMaxResultWindow(),
+            'mapping.total_fields.limit'       => self::TOTAL_FIELD_LIMIT,
         ];
 
         return $settings;
@@ -126,8 +150,9 @@ class IndexSettings implements IndexSettingsInterface
     public function getInstallIndexSettings()
     {
         $settings = [
-            'number_of_replicas' => $this->helper->getNumberOfReplicas(),
-            'refresh_interval'   => self::DIFF_REINDEX_REFRESH_INTERVAL,
+            'number_of_replicas'     => $this->helper->getNumberOfReplicas(),
+            'refresh_interval'       => self::DIFF_REINDEX_REFRESH_INTERVAL,
+            'translog.durability'    => self::DIFF_REINDEX_TRANSLOG_DURABILITY,
         ];
 
         return $settings;
@@ -161,5 +186,22 @@ class IndexSettings implements IndexSettingsInterface
     public function getBatchIndexingSize()
     {
         return $this->helper->getBatchIndexingSize();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getDynamicIndexSettings($store)
+    {
+        $settings         = [];
+        $analysisSettings = $this->getAnalysisSettings($store);
+
+        $shingleDiff = $this->helper->getMaxShingleDiff($analysisSettings);
+        $ngramDiff   = $this->helper->getMaxNgramDiff($analysisSettings);
+
+        $settings += $shingleDiff ? ['max_shingle_diff' => (int) $shingleDiff] : [];
+        $settings += $ngramDiff ? ['max_ngram_diff' => (int) $ngramDiff] : [];
+
+        return $settings;
     }
 }

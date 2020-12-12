@@ -2,19 +2,20 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation\Builder;
 
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
+use Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Aggregation\BuilderInterface;
 
 /**
  * Build an ES histogram aggregation.
@@ -23,7 +24,7 @@ use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
-class Histogram
+class Histogram implements BuilderInterface
 {
     /**
      * Build the aggregation.
@@ -34,6 +35,16 @@ class Histogram
      */
     public function buildBucket(BucketInterface $bucket)
     {
-        return ['histogram' => ['field' => $bucket->getField(), 'interval' => $bucket->getInterval()]];
+        if ($bucket->getType() !== BucketInterface::TYPE_HISTOGRAM) {
+            throw new \InvalidArgumentException("Query builder : invalid aggregation type {$bucket->getType()}.");
+        }
+
+        $aggParams = [
+            'field'         => $bucket->getField(),
+            'interval'      => $bucket->getInterval(),
+            'min_doc_count' => $bucket->getMinDocCount(),
+        ];
+
+        return ['histogram' => $aggParams];
     }
 }

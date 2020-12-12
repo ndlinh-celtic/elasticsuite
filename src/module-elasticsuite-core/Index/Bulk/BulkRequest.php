@@ -1,14 +1,14 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -21,7 +21,7 @@ use Smile\ElasticsuiteCore\Api\Index\TypeInterface;
 /**
  * Default implementation for ES bulk (Smile\ElasticsuiteCore\Api\Index\BulkInterface).
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -53,9 +53,9 @@ class BulkRequest implements BulkRequestInterface
     /**
      * {@inheritdoc}
      */
-    public function addDocument(IndexInterface $index, TypeInterface $type, $docId, array $data)
+    public function addDocument(IndexInterface $index, $docId, array $data)
     {
-        $this->bulkData[] = ['index' => ['_index' => $index->getName(), '_type' => $type->getName(), '_id' => $docId]];
+        $this->bulkData[] = ['index' => ['_index' => $index->getName(), '_type' => '_doc', '_id' => $docId]];
         $this->bulkData[] = $data;
 
         return $this;
@@ -64,10 +64,10 @@ class BulkRequest implements BulkRequestInterface
     /**
      * {@inheritdoc}
      */
-    public function addDocuments(IndexInterface $index, TypeInterface $type, array $data)
+    public function addDocuments(IndexInterface $index, array $data)
     {
         foreach ($data as $docId => $documentData) {
-            $this->addDocument($index, $type, $docId, $documentData);
+            $this->addDocument($index, $docId, $documentData);
         }
 
         return $this;
@@ -76,9 +76,9 @@ class BulkRequest implements BulkRequestInterface
     /**
      * {@inheritdoc}
      */
-    public function deleteDocument(IndexInterface $index, TypeInterface $type, $docId)
+    public function deleteDocument(IndexInterface $index, $docId)
     {
-        $this->bulkData[] = ['delete' => ['_index' => $index->getName(), '_type' => $type->getName(), '_id' => $docId]];
+        $this->bulkData[] = ['delete' => ['_index' => $index->getName(), '_type' => '_doc', '_id' => $docId]];
 
         return $this;
     }
@@ -86,10 +86,10 @@ class BulkRequest implements BulkRequestInterface
     /**
      * {@inheritdoc}
      */
-    public function deleteDocuments(IndexInterface $index, TypeInterface $type, array $docIds)
+    public function deleteDocuments(IndexInterface $index, array $docIds)
     {
         foreach ($docIds as $docId) {
-            $this->deleteDocument($index, $type, $docId);
+            $this->deleteDocument($index, $docId);
         }
 
         return $this;
@@ -98,16 +98,23 @@ class BulkRequest implements BulkRequestInterface
     /**
      * {@inheritdoc}
      */
-    public function updateDocument(IndexInterface $index, TypeInterface $type, $docId, array $data)
+    public function updateDocument(IndexInterface $index, $docId, array $data)
     {
+        $this->bulkData[] = ['update' => ['_index' => $index->getName(), '_type' => '_doc', '_id' => $docId]];
+        $this->bulkData[] = ['doc' => $data];
+
         return $this;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function updateDocuments(IndexInterface $index, TypeInterface $type, array $data)
+    public function updateDocuments(IndexInterface $index, array $data)
     {
+        foreach ($data as $docId => $documentData) {
+            $this->updateDocument($index, $docId, $documentData);
+        }
+
         return $this;
     }
 }

@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalogRule
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalogRule\Model\Rule\Condition\Product;
@@ -19,6 +18,7 @@ use Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory as A
 use Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface;
 use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
 use Smile\ElasticsuiteCore\Api\Index\MappingInterface;
+use Smile\ElasticsuiteCore\Helper\Mapping as MappingHelper;
 
 /**
  * List of attributes used in query building.
@@ -65,6 +65,11 @@ class AttributeList
     private $mapping;
 
     /**
+     * @var \Smile\ElasticsuiteCore\Helper\Mapping
+     */
+    private $mappingHelper;
+
+    /**
      * @var @array
      */
     private $fieldNameMapping = [
@@ -78,6 +83,7 @@ class AttributeList
      * @param AttributeCollectionFactory $attributeCollectionFactory Product attribute collection factory.
      * @param StoreManagerInterface      $storeManager               Store manager.
      * @param IndexOperationInterface    $indexManager               Search engine index manager.
+     * @param MappingHelper              $mappingHelper              Mapping helper.
      * @param string                     $indexName                  Search engine index name.
      * @param string                     $typeName                   Search engine type name.
      */
@@ -85,6 +91,7 @@ class AttributeList
         AttributeCollectionFactory $attributeCollectionFactory,
         StoreManagerInterface $storeManager,
         IndexOperationInterface $indexManager,
+        MappingHelper $mappingHelper,
         $indexName = 'catalog_product',
         $typeName = 'product'
     ) {
@@ -93,6 +100,7 @@ class AttributeList
         $this->indexManager               = $indexManager;
         $this->indexName                  = $indexName;
         $this->typeName                   = $typeName;
+        $this->mappingHelper              = $mappingHelper;
     }
 
     /**
@@ -104,9 +112,7 @@ class AttributeList
     {
         if ($this->attributeCollection === null) {
             $this->attributeCollection = $this->attributeCollectionFactory->create();
-
-            $mapping              = $this->getMapping();
-            $attributeNameMapping = array_flip($this->fieldNameMapping);
+            $attributeNameMapping      = array_flip($this->fieldNameMapping);
 
             $arrayNameCb = function (FieldInterface $field) use ($attributeNameMapping) {
                 $attributeName = $field->getName();
@@ -118,18 +124,7 @@ class AttributeList
                 return $attributeName;
             };
 
-            $attributeFilterCb = function (FieldInterface $field) use ($mapping) {
-                try {
-                    $optionTextFieldName = 'option_text_' . $field->getName();
-                    $field = $mapping->getField($optionTextFieldName);
-                } catch (\Exception $e) {
-                    ;
-                }
-
-                return $field->isFilterable() || $field->isSearchable();
-            };
-
-            $fieldNames = array_map($arrayNameCb, array_filter($this->getMapping()->getFields(), $attributeFilterCb));
+            $fieldNames = array_map($arrayNameCb, $this->getMapping()->getFields());
 
             $this->attributeCollection->addFieldToFilter('attribute_code', $fieldNames)
                  ->addFieldToFilter('backend_type', ['neq' => 'datetime']);
@@ -162,12 +157,28 @@ class AttributeList
     private function getMapping()
     {
         if ($this->mapping === null) {
-            $defaultStore = $this->storeManager->getDefaultStoreView();
+            $defaultStore = $this->getDefaultStoreView();
             $index        = $this->indexManager->getIndexByName($this->indexName, $defaultStore);
 
-            $this->mapping = $index->getType($this->typeName)->getMapping();
+            $this->mapping = $index->getMapping();
         }
 
         return $this->mapping;
+    }
+
+    /**
+     * Retrieve default Store View
+     *
+     * @return \Magento\Store\Api\Data\StoreInterface
+     */
+    private function getDefaultStoreView()
+    {
+        $store = $this->storeManager->getDefaultStoreView();
+        if (null === $store) {
+            // Occurs when current user does not have access to default website (due to AdminGWS ACLS on Magento EE).
+            $store = current($this->storeManager->getWebsites())->getDefaultStore();
+        }
+
+        return $store;
     }
 }

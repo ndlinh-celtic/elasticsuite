@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -32,17 +32,10 @@ use Smile\ElasticsuiteCore\Search\Request\SortOrderInterface;
 interface RequestInterface extends \Magento\Framework\Search\RequestInterface
 {
     /**
-     * Searched doucument type.
-     *
-     * @return string
-     */
-    public function getType();
-
-    /**
      * Hits filter (does not apply to aggregations).
 
      * Filter are actually using QueryInterface since there is no differences
-     * beetween queries and filters in ElasticSearch 2.x DSL.
+     * beetween queries and filters in Elasticsearch 2.x DSL.
      *
      * @return QueryInterface
      */
@@ -61,4 +54,11 @@ interface RequestInterface extends \Magento\Framework\Search\RequestInterface
      * @return boolean
      */
     public function isSpellchecked();
+
+    /**
+     * Get the value of the track_total_hits parameter, if any.
+     *
+     * @return int|bool
+     */
+    public function getTrackTotalHits();
 }

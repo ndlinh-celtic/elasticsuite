@@ -2,27 +2,27 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\ResourceModel;
 
-use Magento\CatalogSearch\Model\ResourceModel\Engine as MySqlEngine;
+use Magento\Elasticsearch\Model\ResourceModel\Engine as ElasticsearchEngine;
 
 /**
- * ElasticSearch search engine implementation.
+ * Elasticsearch search engine implementation.
  *
  * @category Smile
  * @package  Smile\ElasticsuiteCatalog
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
-class Engine extends MySqlEngine
+class Engine extends ElasticsearchEngine
 {
 
 }

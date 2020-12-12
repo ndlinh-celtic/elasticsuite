@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Category\Indexer\Fulltext\Action;
@@ -15,7 +16,7 @@ namespace Smile\ElasticsuiteCatalog\Model\Category\Indexer\Fulltext\Action;
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Category\Indexer\Fulltext\Action\Full as ResourceModel;
 
 /**
- * ElasticSearch categories full indexer
+ * Elasticsearch categories full indexer
  *
  * @category Smile
  * @package  Smile\ElasticsuiteCatalog
@@ -24,7 +25,7 @@ use Smile\ElasticsuiteCatalog\Model\ResourceModel\Category\Indexer\Fulltext\Acti
 class Full
 {
     /**
-     * @var \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Indexer\Fulltext\Action\Full
+     * @var \Smile\ElasticsuiteCatalog\Model\ResourceModel\Category\Indexer\Fulltext\Action\Full
      */
     private $resourceModel;
 

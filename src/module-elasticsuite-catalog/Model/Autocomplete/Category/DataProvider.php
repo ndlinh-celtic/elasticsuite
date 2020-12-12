@@ -1,17 +1,19 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
- * @package   Smile\ElasticSuiteCatalog
+ * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Autocomplete\Category;
 
+use Magento\Catalog\Model\Category;
 use Magento\Search\Model\Autocomplete\DataProviderInterface;
 use Magento\Search\Model\QueryFactory;
 use Smile\ElasticsuiteCatalog\Helper\Autocomplete as ConfigurationHelper;
@@ -22,7 +24,7 @@ use Smile\ElasticsuiteCore\Model\Autocomplete\Terms\DataProvider as TermDataProv
  * Catalog category autocomplete data provider.
  *
  * @category Smile
- * @package  Smile\ElasticSuiteCatalog
+ * @package  Smile\ElasticsuiteCatalog
  * @author   Romain Ruaud <romain.ruaud@smile.fr>
  */
 class DataProvider implements DataProviderInterface
@@ -106,14 +108,39 @@ class DataProvider implements DataProviderInterface
     public function getItems()
     {
         $result = [];
-        $categoryCollection = $this->getCategoryCollection();
-        if ($categoryCollection) {
-            foreach ($categoryCollection as $category) {
-                $result[] = $this->itemFactory->create(['category' => $category, 'type' => $this->getType()]);
+
+        if ($this->configurationHelper->isEnabled($this->getType())) {
+            $categoryCollection = $this->getCategoryCollection();
+            if ($categoryCollection) {
+                foreach ($categoryCollection as $category) {
+                    if (!$this->isCategoryAvailable($category)) {
+                        continue;
+                    }
+
+                    $result[] = $this->itemFactory->create([
+                        'category' => $category,
+                        'type'     => $this->getType(),
+                    ]);
+                }
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Filter disabled categories
+     *
+     * @param Category $category Filterable category
+     *
+     * @return bool
+     */
+    private function isCategoryAvailable(Category $category): bool
+    {
+        return $category->getIsActive()
+            && !$category->getIsHidden()
+            && $category->isInRootCategoryList()
+        ;
     }
 
     /**
@@ -142,6 +169,7 @@ class DataProvider implements DataProviderInterface
     private function getCategoryCollection()
     {
         $categoryCollection = null;
+
         $suggestedTerms = $this->getSuggestedTerms();
         $terms          = [$this->queryFactory->get()->getQueryText()];
 
@@ -150,7 +178,8 @@ class DataProvider implements DataProviderInterface
         }
 
         $categoryCollection = $this->categoryCollectionFactory->create();
-        $categoryCollection->addSearchFilter($terms);
+        $categoryCollection->addAttributeToSelect("is_active");
+        $categoryCollection->setSearchQuery($terms);
         $categoryCollection->setPageSize($this->getResultsPageSize());
 
         return $categoryCollection;

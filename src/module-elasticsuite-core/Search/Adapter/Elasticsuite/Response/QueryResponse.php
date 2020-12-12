@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -123,7 +123,11 @@ class QueryResponse implements ResponseInterface
                 $this->documents[] = $documentFactory->create($hit);
             }
 
-            $this->count = $searchResponse['hits']['total'];
+            // @codingStandardsIgnoreStart
+            $this->count = is_array($searchResponse['hits']['total'])
+                ? $searchResponse['hits']['total']['value']
+                : $searchResponse['hits']['total'];
+            // @codingStandardsIgnoreEnd
         }
     }
 }

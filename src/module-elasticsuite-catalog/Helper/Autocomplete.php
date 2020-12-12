@@ -1,18 +1,18 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Helper;
 
-use Magento\CatalogInventory\Api\StockConfigurationInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\App\Helper\Context;
 
@@ -26,34 +26,33 @@ use Magento\Framework\App\Helper\Context;
 class Autocomplete extends \Smile\ElasticsuiteCore\Helper\Autocomplete
 {
     /**
-     * @var \Magento\CatalogInventory\Api\StockConfigurationInterface
+     * @var ProductAttribute
      */
-    private $stockConfiguration;
+    private $attributeHelper;
 
     /**
      * Constructor.
      *
-     * @param Context                     $context            Helper context.
-     * @param StoreManagerInterface       $storeManager       Store manager.
-     * @param StockConfigurationInterface $stockConfiguration Stock Configuration Interface.
+     * @param Context               $context         Helper context.
+     * @param StoreManagerInterface $storeManager    Store manager.
+     * @param ProductAttribute      $attributeHelper Attribute helper.
      */
-    public function __construct(Context $context, StoreManagerInterface $storeManager, StockConfigurationInterface $stockConfiguration)
+    public function __construct(Context $context, StoreManagerInterface $storeManager, ProductAttribute $attributeHelper)
     {
-        $this->storeManager       = $storeManager;
-        $this->stockConfiguration = $stockConfiguration;
-
         parent::__construct($context, $storeManager);
+
+        $this->attributeHelper = $attributeHelper;
     }
 
     /**
-     * Check if Stock configuration allows to display out of stock products
+     * ES field used in attribute autocomplete.
      *
-     * @param int $storeId The store Id. Will use current store if null.
+     * @param \Magento\Catalog\Api\Data\ProductAttributeInterface $attribute Attribute.
      *
-     * @return bool
+     * @return string
      */
-    public function isShowOutOfStock($storeId = null)
+    public function getAttributeAutocompleteField(\Magento\Catalog\Api\Data\ProductAttributeInterface $attribute)
     {
-        return $this->stockConfiguration->isShowOutOfStock($storeId);
+        return $this->attributeHelper->getFilterField($attribute);
     }
 }

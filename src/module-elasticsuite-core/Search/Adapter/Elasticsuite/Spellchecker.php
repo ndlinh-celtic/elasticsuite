@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -16,12 +16,13 @@ namespace Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite;
 
 use Smile\ElasticsuiteCore\Api\Search\SpellcheckerInterface;
 use Smile\ElasticsuiteCore\Api\Search\Spellchecker\RequestInterface;
-use Smile\ElasticsuiteCore\Api\Client\ClientFactoryInterface;
+use Smile\ElasticsuiteCore\Api\Client\ClientInterface;
 use Smile\ElasticsuiteCore\Api\Index\MappingInterface;
 use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
+use Smile\ElasticsuiteCore\Helper\Cache as CacheHelper;
 
 /**
- * Spellchecker ElasticSearch implementation.
+ * Spellchecker Elasticsearch implementation.
  * This implementation rely on the ES term vectors API.
  *
  * @category Smile
@@ -31,18 +32,25 @@ use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
 class Spellchecker implements SpellcheckerInterface
 {
     /**
-     * @var \Elasticsearch\Client
+     * @var ClientInterface
      */
     private $client;
 
     /**
+     * @var CacheHelper
+     */
+    private $cacheHelper;
+
+    /**
      * Constructor.
      *
-     * @param ClientFactoryInterface $clientFactory ES Client Factory.
+     * @param ClientInterface $client      ES Client Factory.
+     * @param CacheHelper     $cacheHelper ES cache helper.
      */
-    public function __construct(ClientFactoryInterface $clientFactory)
+    public function __construct(ClientInterface $client, CacheHelper $cacheHelper)
     {
-        $this->client       = $clientFactory->createClient();
+        $this->client      = $client;
+        $this->cacheHelper = $cacheHelper;
     }
 
     /**
@@ -50,23 +58,63 @@ class Spellchecker implements SpellcheckerInterface
      */
     public function getSpellingType(RequestInterface $request)
     {
-        $cutoffFrequencyLimit = $this->getCutoffrequencyLimit($request);
-        $termVectors          = $this->getTermVectors($request);
-        $queryTermStats       = $this->parseTermVectors($termVectors, $cutoffFrequencyLimit);
+        $cacheKey = $this->getCacheKey($request);
 
-        $spellingType = self::SPELLING_TYPE_FUZZY;
+        $spellingType = $this->cacheHelper->loadCache($cacheKey);
 
-        if ($queryTermStats['total'] == $queryTermStats['stop']) {
-            $spellingType = self::SPELLING_TYPE_PURE_STOPWORDS;
-        } elseif ($queryTermStats['total'] == $queryTermStats['stop'] + $queryTermStats['exact']) {
-            $spellingType = self::SPELLING_TYPE_EXACT;
-        } elseif ($queryTermStats['missing'] == 0) {
-            $spellingType = self::SPELLING_TYPE_MOST_EXACT;
-        } elseif ($queryTermStats['total'] - $queryTermStats['missing'] > 0) {
-            $spellingType = self::SPELLING_TYPE_MOST_FUZZY;
+        if ($spellingType === false) {
+            $spellingType = $this->loadSpellingType($request);
+            $this->cacheHelper->saveCache($cacheKey, $spellingType, [$request->getIndex()]);
         }
 
         return $spellingType;
+    }
+
+    /**
+     * Compute the spelling time using the engine.
+     *
+     * @param RequestInterface $request Spellchecking request.
+     *
+     * @return integer
+     */
+    private function loadSpellingType(RequestInterface $request)
+    {
+        $spellingType = self::SPELLING_TYPE_FUZZY;
+
+        try {
+            $cutoffFrequencyLimit = $this->getCutoffrequencyLimit($request);
+            $termVectors          = $this->getTermVectors($request);
+            if (is_array($termVectors) && isset($termVectors['docs'])) {
+                $termVectors = current($termVectors['docs']);
+            }
+            $queryTermStats       = $this->parseTermVectors($termVectors, $cutoffFrequencyLimit);
+
+            if ($queryTermStats['total'] == $queryTermStats['stop']) {
+                $spellingType = self::SPELLING_TYPE_PURE_STOPWORDS;
+            } elseif ($queryTermStats['total'] == $queryTermStats['stop'] + $queryTermStats['exact']) {
+                $spellingType = self::SPELLING_TYPE_EXACT;
+            } elseif ($queryTermStats['missing'] == 0) {
+                $spellingType = self::SPELLING_TYPE_MOST_EXACT;
+            } elseif ($queryTermStats['total'] - $queryTermStats['missing'] > 0) {
+                $spellingType = self::SPELLING_TYPE_MOST_FUZZY;
+            }
+        } catch (\Exception $e) {
+            $spellingType = self::SPELLING_TYPE_EXACT;
+        }
+
+        return $spellingType;
+    }
+
+    /**
+     * Compute an unique caching key for the spellcheck request.
+     *
+     * @param RequestInterface $request Spellchecking request.
+     *
+     * @return string
+     */
+    private function getCacheKey(RequestInterface $request)
+    {
+        return implode('|', [$request->getIndex(), $request->getQueryText()]);
     }
 
     /**
@@ -79,7 +127,7 @@ class Spellchecker implements SpellcheckerInterface
      */
     private function getCutoffrequencyLimit(RequestInterface $request)
     {
-        $indexStatsResponse = $this->client->indices()->stats(['index' => $request->getIndex()]);
+        $indexStatsResponse = $this->client->indexStats($request->getIndex());
         $indexStats         = current($indexStatsResponse['indices']);
         $totalIndexedDocs = $indexStats['total']['docs']['count'];
 
@@ -95,16 +143,22 @@ class Spellchecker implements SpellcheckerInterface
      */
     private function getTermVectors(RequestInterface $request)
     {
-        $termVectorsQuery = [
-            'index'           => $request->getIndex(),
-            'type'            => $request->getType(),
-            'id'              => '',
-            'term_statistics' => true,
+        $mtermVectorsQuery['body'] = [
+            'docs' => [
+                [
+                    '_index'          => $request->getIndex(),
+                    '_type'           => '_doc',
+                    'term_statistics' => true,
+                    'fields'          => [
+                        MappingInterface::DEFAULT_SPELLING_FIELD,
+                        MappingInterface::DEFAULT_SPELLING_FIELD . "." . FieldInterface::ANALYZER_WHITESPACE,
+                    ],
+                    'doc'             => [MappingInterface::DEFAULT_SPELLING_FIELD => $request->getQueryText()],
+                ],
+            ],
         ];
 
-        $termVectorsQuery['body']['doc'] = [MappingInterface::DEFAULT_SPELLING_FIELD => $request->getQueryText()];
-
-        return $this->client->termvectors($termVectorsQuery);
+        return $this->client->mtermvectors($mtermVectorsQuery);
     }
 
     /**
@@ -162,7 +216,7 @@ class Spellchecker implements SpellcheckerInterface
             if (in_array($analyzer, $analyzers)) {
                 foreach ($fieldData['terms'] as $term => $termStats) {
                     foreach ($termStats['tokens'] as $token) {
-                        $positionKey = sprintf("%s_%s", $token['start_offset'], $token['end_offset']);
+                        $positionKey = $token['position'];
 
                         if (!isset($termStats['doc_freq'])) {
                             $termStats['doc_freq'] = 0;

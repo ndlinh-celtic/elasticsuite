@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Searchandising Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteTracker
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteTracker\Block\Variables\Page;
@@ -66,7 +66,6 @@ class Order extends \Smile\ElasticsuiteTracker\Block\Variables\Page\AbstractBloc
         $order = $order = $this->checkoutSession->getLastRealOrder();
 
         if ($order) {
-            $variables['order.id']              = $order->getIncrementId();
             $variables['order.subtotal']        = $order->getBaseSubtotalInclTax();
             $variables['order.discount_total']  = $order->getDiscountAmount();
             $variables['order.shipping_total']  = $order->getShippingAmount();
@@ -75,8 +74,9 @@ class Order extends \Smile\ElasticsuiteTracker\Block\Variables\Page\AbstractBloc
             $variables['order.payment_method']  = $order->getPayment()->getMethod();
             $variables['order.salesrules']      = $order->getAppliedRuleIds();
 
+            $itemId = 0;
             foreach ($order->getAllItems() as $item) {
-                $variables = array_merge($variables, $this->getOrderItemVariables($item));
+                $variables = array_merge($variables, $this->getOrderItemVariables($item, $itemId++));
             }
         }
 
@@ -86,16 +86,16 @@ class Order extends \Smile\ElasticsuiteTracker\Block\Variables\Page\AbstractBloc
     /**
      * Retrieve tracking variables for an order item
      *
-     * @param \Magento\Sales\Model\Order\Item $item The order item
+     * @param \Magento\Sales\Model\Order\Item $item   The order item
+     * @param int                             $itemId The order item id, dynamically generated.
      *
      * @return array
      */
-    private function getOrderItemVariables($item)
+    private function getOrderItemVariables($item, $itemId)
     {
         $variables = [];
 
         if (!$item->isDummy()) {
-            $itemId = $item->getId();
             $prefix = "order.items.$itemId";
             $variables[$prefix . '.sku']        = $item->getSku();
             $variables[$prefix . '.product_id'] = $item->getProductId();
@@ -105,7 +105,8 @@ class Order extends \Smile\ElasticsuiteTracker\Block\Variables\Page\AbstractBloc
             $variables[$prefix . '.label']      = $item->getName();
             $variables[$prefix . '.salesrules'] = $item->getAppliedRuleIds();
 
-            if ($product = $item->getProduct()) {
+            $product = $item->getProduct();
+            if ($product) {
                 $categoriesId = $product->getCategoryIds();
                 if (count($categoriesId)) {
                     $variables[$prefix . '.category_ids'] = implode(",", $categoriesId);

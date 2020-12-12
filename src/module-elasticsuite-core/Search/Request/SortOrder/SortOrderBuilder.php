@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -88,10 +88,14 @@ class SortOrderBuilder
                 }
 
                 if (isset($sortOrderParams['nestedFilter'])) {
-                    $nestedFilter = $this->queryBuilder->create($containerConfig, $sortOrderParams['nestedFilter']);
-                    $sortOrderParams['nestedFilter'] = $nestedFilter->getQuery();
+                    $nestedFilter = $this->queryBuilder->create(
+                        $containerConfig,
+                        $sortOrderParams['nestedFilter'],
+                        $sortOrderParams['nestedPath']
+                    );
+                    $sortOrderParams['nestedFilter'] = $nestedFilter;
                 }
-            } catch (\LogicException $e) {
+            } catch (\LogicException $exception) {
                 $sortOrderParams['field'] = $fieldName;
             }
 
@@ -145,7 +149,8 @@ class SortOrderBuilder
      */
     private function getSortOrderParams(FieldInterface $field, array $sortOrderParams)
     {
-        $sortOrderParams['field'] = $field->getMappingProperty(FieldInterface::ANALYZER_SORTABLE);
+        $sortOrderParams['field']   = $field->getMappingProperty(FieldInterface::ANALYZER_SORTABLE);
+        $sortOrderParams['missing'] = $field->getSortMissing($sortOrderParams['direction']);
 
         if ($field->isNested() && !isset($sortOrderParams['nestedPath'])) {
             $sortOrderParams['nestedPath'] = $field->getNestedPath();

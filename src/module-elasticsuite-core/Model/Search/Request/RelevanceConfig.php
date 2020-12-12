@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -21,6 +22,7 @@ use Magento\Framework\DB\TransactionFactory;
 use Magento\Framework\Event\ManagerInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Smile\ElasticsuiteCore\Model\Search\Request\Source\Containers;
+use Smile\ElasticsuiteCore\Search\Request\RelevanceConfig\App\Config\ScopePool;
 
 /**
  * Relevance Configuration Model
@@ -37,12 +39,19 @@ class RelevanceConfig extends \Magento\Config\Model\Config
     protected $containersSource;
 
     /**
-     * @var bool If getting full config or not
+     * @var boolean If getting full config or not
      */
     protected $fullConfig;
 
     /**
+     * @var \Smile\ElasticsuiteCore\Search\Request\RelevanceConfig\App\Config\ScopePool
+     */
+    private $scopePool;
+
+    /**
      * Class constructor
+     *
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList) The parent method has already 9.
      *
      * @param ReinitableConfigInterface $config             Configuration interface
      * @param ManagerInterface          $eventManager       Event Manager
@@ -52,6 +61,7 @@ class RelevanceConfig extends \Magento\Config\Model\Config
      * @param ValueFactory              $configValueFactory Configuration Value Factory
      * @param StoreManagerInterface     $storeManager       Store Manager
      * @param Containers                $containersSource   The Containers source model
+     * @param ScopePool                 $scopePool          RelevanceConfiguration Scope Pool
      * @param array                     $data               The data
      */
     public function __construct(
@@ -63,10 +73,13 @@ class RelevanceConfig extends \Magento\Config\Model\Config
         ValueFactory $configValueFactory,
         StoreManagerInterface $storeManager,
         Containers $containersSource,
+        ScopePool $scopePool,
         array $data = []
     ) {
         $this->containersSource = $containersSource;
-        $this->fullConfig = true;
+        $this->fullConfig       = true;
+        $this->scopePool        = $scopePool;
+
         parent::__construct(
             $config,
             $eventManager,
@@ -74,9 +87,13 @@ class RelevanceConfig extends \Magento\Config\Model\Config
             $transactionFactory,
             $configLoader,
             $configValueFactory,
-            $storeManager,
-            $data
+            $storeManager
         );
+
+        // Mimic the call to \Magento\Framework\DataObject::__construct($data).
+        // $data parameter is intentionally omitted in parent::__construct() call because parent constructor is
+        // inconsistent between minor magento versions.
+        $this->_data = $data;
     }
 
     /**
@@ -120,6 +137,7 @@ class RelevanceConfig extends \Magento\Config\Model\Config
             $deleteTransaction->delete();
             $saveTransaction->save();
             $this->_appConfig->reinit();
+            $this->scopePool->clean();
             $this->_eventManager->dispatch(
                 "smile_elasticsuite_relevance_config_changed_section_{$this->getSection()}",
                 ['container' => $this->getContainer(), 'store' => $this->getStore()]
@@ -182,5 +200,6 @@ class RelevanceConfig extends \Magento\Config\Model\Config
 
         $this->setScope($scope);
         $this->setScopeCode($scopeCode);
+        $this->setScopeId($scopeCode);
     }
 }

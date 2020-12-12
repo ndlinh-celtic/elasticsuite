@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
- * @package   Smile\ElasticSuiteCatalog
+ * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\ResourceModel\Category\Fulltext;
@@ -27,7 +28,7 @@ use Smile\ElasticsuiteCore\Search\RequestInterface;
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  *
  * @category Smile
- * @package  Smile\ElasticSuiteCatalog
+ * @package  Smile\ElasticsuiteCatalog
  * @author   Romain Ruaud <romain.ruaud@smile.fr>
  */
 class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collection
@@ -58,19 +59,14 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
     private $queryFilters = [];
 
     /**
-     * @var array
-     */
-    private $facets = [];
-
-    /**
      * @var QueryResponse
      */
     private $queryResponse;
 
     /**
-     * @var string
+     * @var string|QueryInterface
      */
-    private $queryText;
+    private $query;
 
     /**
      * @var boolean
@@ -187,7 +183,23 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
     }
 
     /**
-     * Add search query filter
+     * Set search query filter in the collection.
+     *
+     * @param string|QueryInterface $query Search query text.
+     *
+     * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
+     */
+    public function setSearchQuery($query)
+    {
+        $this->query = $query;
+
+        return $this;
+    }
+
+    /**
+     * Add search query filter.
+     *
+     * @deprecated Replaced by setSearchQuery
      *
      * @param string $query Search query text.
      *
@@ -195,26 +207,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
      */
     public function addSearchFilter($query)
     {
-        $this->queryText = $query;
-
-        return $this;
-    }
-
-    /**
-     * Append a facet to the collection
-     *
-     * @param string $field       Facet field.
-     * @param string $facetType   Facet type.
-     * @param array  $facetConfig Facet config params.
-     * @param array  $facetFilter Facet filter.
-     *
-     * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
-     */
-    public function addFacet($field, $facetType, $facetConfig, $facetFilter = null)
-    {
-        $this->facets[$field] = ['type' => $facetType, 'filter' => $facetFilter, 'config' => $facetConfig];
-
-        return $this;
+        return $this->setSearchQuery($query);
     }
 
     /**
@@ -235,7 +228,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
         if ($bucket) {
             foreach ($bucket->getValues() as $value) {
                 $metrics = $value->getMetrics();
-                $result[$metrics['value']] = $metrics;
+                $result[$value->getValue()] = $metrics['count'];
             }
         }
 
@@ -324,9 +317,6 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
         $size = $this->_pageSize ? $this->_pageSize : 20;
         $from = $size * (max(1, $this->_curPage) - 1);
 
-        // Query text.
-        $queryText = $this->queryText;
-
         // Setup sort orders.
         $sortOrders = $this->prepareSortOrders();
 
@@ -335,11 +325,10 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
             $searchRequestName,
             $from,
             $size,
-            $queryText,
+            $this->query,
             $sortOrders,
             $this->filters,
-            $this->queryFilters,
-            $this->facets
+            $this->queryFilters
         );
 
         return $searchRequest;
@@ -374,15 +363,12 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Category\Collectio
         $storeId     = $this->getStoreId();
         $requestName = $this->searchRequestName;
 
-        // Query text.
-        $queryText = $this->queryText;
-
         $searchRequest = $this->requestBuilder->create(
             $storeId,
             $requestName,
             0,
             0,
-            $queryText,
+            $this->query,
             [],
             $this->filters,
             $this->queryFilters

@@ -2,18 +2,16 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Searchandising Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteTracker
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteTracker\Helper;
-
-use Magento\Framework\App\Helper;
 
 /**
  * Smile Tracker helper
@@ -31,16 +29,28 @@ class Data extends \Magento\Framework\App\Helper\AbstractHelper
     const CONFIG_IS_ENABLED_XPATH = 'smile_elasticsuite_tracker/general/enabled';
 
     /**
-     * Tracking URL configuration path
-     * @var string
-     */
-    const CONFIG_BASE_URL_XPATH   = 'smile_elasticsuite_tracker/general/base_url';
-
-    /**
      * Coookie configuration configuration path
      * @var string
      */
     const CONFIG_COOKIE           = 'smile_elasticsuite_tracker/session';
+
+    /**
+     * Anonymization status configuration path
+     * @var string
+     */
+    const CONFIG_IS_ANONYMIZATION_ENABLED_XPATH = 'smile_elasticsuite_tracker/anonymization/enabled';
+
+    /**
+     * Anonymization delay configuration path
+     * @var string
+     */
+    const CONFIG_ANONYMIZATION_DELAY_XPATH      = 'smile_elasticsuite_tracker/anonymization/delay';
+
+    /**
+     * Module retention delay configuration path
+     * @var string
+     */
+    const CONFIG_RETENTION_DELAY_XPATH = 'smile_elasticsuite_tracker/general/retention_delay';
 
     /**
      * Magento Configuration
@@ -57,26 +67,38 @@ class Data extends \Magento\Framework\App\Helper\AbstractHelper
     private $storeManager;
 
     /**
-     * Magento assets repository
-     *
-     * @var \Magento\Framework\View\Asset\Repository
+     * @var \Magento\Framework\UrlInterface
      */
-    private $assetRepository;
+    private $urlBuilder;
+
+    /**
+     * @var \Magento\Framework\Session\SessionManagerInterface
+     */
+    private $sessionManager;
+
+    /**
+     * @var \Magento\Framework\Stdlib\CookieManagerInterface
+     */
+    private $cookieManager;
 
     /**
      * PHP Constructor
      *
-     * @param \Magento\Framework\App\Helper\Context      $context         The current context
-     * @param \Magento\Store\Model\StoreManagerInterface $storeManager    The Store Manager
-     * @param \Magento\Framework\View\Asset\Repository   $assetRepository The asset repository
+     * @param \Magento\Framework\App\Helper\Context              $context        The current context
+     * @param \Magento\Store\Model\StoreManagerInterface         $storeManager   The Store Manager
+     * @param \Magento\Framework\Session\SessionManagerInterface $sessionManager Session Manager
+     * @param \Magento\Framework\Stdlib\CookieManagerInterface   $cookieManager  Cookie manager
      */
     public function __construct(
         \Magento\Framework\App\Helper\Context $context,
         \Magento\Store\Model\StoreManagerInterface $storeManager,
-        \Magento\Framework\View\Asset\Repository $assetRepository
+        \Magento\Framework\Session\SessionManagerInterface $sessionManager,
+        \Magento\Framework\Stdlib\CookieManagerInterface $cookieManager
     ) {
-        $this->storeManager    = $storeManager;
-        $this->assetRepository = $assetRepository;
+        $this->urlBuilder     = $context->getUrlBuilder();
+        $this->storeManager   = $storeManager;
+        $this->sessionManager = $sessionManager;
+        $this->cookieManager  = $cookieManager;
         parent::__construct($context);
     }
 
@@ -97,15 +119,7 @@ class Data extends \Magento\Framework\App\Helper\AbstractHelper
      */
     public function getBaseUrl()
     {
-        $result = $this->scopeConfig->getValue(self::CONFIG_BASE_URL_XPATH);
-
-        if (!$result) {
-            $params = ['_secure' => $this->_getRequest()->isSecure()];
-
-            return $this->assetRepository->getUrlWithParams("Smile_ElasticsuiteTracker::hit.png", $params);
-        }
-
-        return $result;
+        return trim($this->urlBuilder->getUrl('elasticsuite/tracker/hit', ['image' => 'h.png']), '/');
     }
 
     /**
@@ -115,7 +129,11 @@ class Data extends \Magento\Framework\App\Helper\AbstractHelper
      */
     public function getCookieConfig()
     {
-        return $this->scopeConfig->getValue(self::CONFIG_COOKIE);
+        $config           = $this->scopeConfig->getValue(self::CONFIG_COOKIE);
+        $config['domain'] = $this->sessionManager->getCookieDomain();
+        $config['path']   = $this->sessionManager->getCookiePath();
+
+        return $config;
     }
 
     /**
@@ -126,5 +144,72 @@ class Data extends \Magento\Framework\App\Helper\AbstractHelper
     public function getStoreId()
     {
         return $this->storeManager->getStore()->getId();
+    }
+
+
+    /**
+     * Check if Anonymization is enabled.
+     *
+     * @return bool
+     */
+    public function isAnonymizationEnabled()
+    {
+        return $this->scopeConfig->isSetFlag(self::CONFIG_IS_ANONYMIZATION_ENABLED_XPATH);
+    }
+
+    /**
+     * Retrieve anonymization delay (in days).
+     *
+     * @return int
+     */
+    public function getAnonymizationDelay()
+    {
+        return (int) $this->scopeConfig->getValue(self::CONFIG_ANONYMIZATION_DELAY_XPATH);
+    }
+
+    /**
+     * Return the tracking data retention delay, in days
+     *
+     * @return int
+     */
+    public function getRetentionDelay()
+    {
+        return (int) $this->scopeConfig->getValue(self::CONFIG_RETENTION_DELAY_XPATH);
+    }
+
+    /**
+     * Return the current tracker visitor id
+     *
+     * @return null|string
+     */
+    public function getCurrentVisitorId()
+    {
+        $visitorId = null;
+
+        $cookieConfig = $this->getCookieConfig();
+        if (array_key_exists('visitor_cookie_name', $cookieConfig)) {
+            $visitorCookieName = $cookieConfig['visitor_cookie_name'];
+            $visitorId = $this->cookieManager->getCookie($visitorCookieName);
+        }
+
+        return $visitorId;
+    }
+
+    /**
+     * Return the current tracker session id
+     *
+     * @return null|string
+     */
+    public function getCurrentSessionId()
+    {
+        $visitorId = null;
+
+        $cookieConfig = $this->getCookieConfig();
+        if (array_key_exists('visit_cookie_name', $cookieConfig)) {
+            $sessionCookieName = $cookieConfig['visit_cookie_name'];
+            $visitorId = $this->cookieManager->getCookie($sessionCookieName);
+        }
+
+        return $visitorId;
     }
 }

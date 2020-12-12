@@ -1,26 +1,27 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Index;
 
 use Smile\ElasticsuiteCore\Api\Index\IndexInterface;
+use Smile\ElasticsuiteCore\Api\Index\MappingInterface;
 use Smile\ElasticsuiteCore\Api\Index\TypeInterface;
 
 /**
  * Default implementation for ES indices (Smile\ElasticsuiteCore\Api\Index\IndexInterface).
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -41,13 +42,6 @@ class Index implements IndexInterface
     private $name;
 
     /**
-     * Index types.
-     *
-     * @var \Smile\ElasticsuiteCore\Api\Index\TypeInterface[]
-     */
-    private $types;
-
-    /**
      * Indicates if index is installed.
      *
      * @var boolean
@@ -60,23 +54,35 @@ class Index implements IndexInterface
     private $defaultSearchType;
 
     /**
-     * Instanciate a new index.
+     * @var MappingInterface
+     */
+    private $mapping;
+
+    /**
+     * Instantiate a new index.
      *
      * @SuppressWarnings(PHPMD.BooleanArgumentFlag)
      *
-     * @param string          $identifier        Index real name.
-     * @param string          $name              Index real name.
-     * @param TypeInterface[] $types             Index current types.
-     * @param string          $defaultSearchType Default type used in searches.
-     * @param boolean         $needInstall       Indicates if the index needs to be installed.
+     * @throws \InvalidArgumentException When the default search type is invalid.
+     *
+     * @param string           $identifier        Index real name.
+     * @param string           $name              Index real name.
+     * @param string           $defaultSearchType Default type used in searches.
+     * @param MappingInterface $mapping           Index Mapping.
+     * @param boolean          $needInstall       Indicates if the index needs to be installed.
      */
-    public function __construct($identifier, $name, array $types, $defaultSearchType, $needInstall = false)
-    {
+    public function __construct(
+        $identifier,
+        $name,
+        $defaultSearchType,
+        MappingInterface $mapping,
+        $needInstall = false
+    ) {
         $this->identifier         = $identifier;
         $this->name               = $name;
-        $this->types              = $types;
         $this->needInstall        = $needInstall;
         $this->defaultSearchType  = $defaultSearchType;
+        $this->mapping            = $mapping;
     }
 
     /**
@@ -98,22 +104,6 @@ class Index implements IndexInterface
     /**
      * {@inheritdoc}
      */
-    public function getTypes()
-    {
-        return $this->types;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getType($typeName)
-    {
-        return $this->types[$typeName];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function needInstall()
     {
         return $this->needInstall;
@@ -124,6 +114,22 @@ class Index implements IndexInterface
      */
     public function getDefaultSearchType()
     {
-        return $this->getType($this->defaultSearchType);
+        return $this->defaultSearchType;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getMapping()
+    {
+        return $this->mapping;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getIdField()
+    {
+        return $this->getMapping()->getIdField();
     }
 }

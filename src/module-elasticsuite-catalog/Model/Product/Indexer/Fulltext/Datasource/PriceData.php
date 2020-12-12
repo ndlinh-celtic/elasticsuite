@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -16,7 +16,6 @@ namespace Smile\ElasticsuiteCatalog\Model\Product\Indexer\Fulltext\Datasource;
 
 use Smile\ElasticsuiteCore\Api\Index\DatasourceInterface;
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Indexer\Fulltext\Datasource\PriceData as ResourceModel;
-use Magento\Catalog\Model\Product\TypeFactory as ProductTypeFactory;
 
 /**
  * Datasource used to append prices data to product during indexing.
@@ -33,20 +32,20 @@ class PriceData implements DatasourceInterface
     private $resourceModel;
 
     /**
-     * @var ProductType
+     * @var PriceData\PriceDataReaderInterface[]
      */
-    private $productType;
+    private $priceReaderPool = [];
 
     /**
      * Constructor.
      *
-     * @param ResourceModel      $resourceModel      Resource model
-     * @param ProductTypeFactory $productTypeFactory Product type factory (used to detect products types).
+     * @param ResourceModel                        $resourceModel   Resource model
+     * @param PriceData\PriceDataReaderInterface[] $priceReaderPool Price modifiers pool.
      */
-    public function __construct(ResourceModel $resourceModel, ProductTypeFactory $productTypeFactory)
+    public function __construct(ResourceModel $resourceModel, $priceReaderPool = [])
     {
-        $this->resourceModel = $resourceModel;
-        $this->productType   = $productTypeFactory->create();
+        $this->resourceModel     = $resourceModel;
+        $this->priceReaderPool = $priceReaderPool;
     }
 
     /**
@@ -59,42 +58,49 @@ class PriceData implements DatasourceInterface
         $priceData = $this->resourceModel->loadPriceData($storeId, array_keys($indexData));
 
         foreach ($priceData as $priceDataRow) {
-            $productId = (int) $priceDataRow['entity_id'];
-            $isOriginalPriceReliable = $this->isOriginalPriceReliable($indexData[$productId]['type_id']);
+            $productId     = (int) $priceDataRow['entity_id'];
+            $productTypeId = $indexData[$productId]['type_id'];
+            $priceModifier = $this->getPriceDataReader($productTypeId);
 
-            $originalPrice = $priceDataRow['min_price'];
-            $finalPrice = $priceDataRow['min_price'];
-
-            if ($isOriginalPriceReliable) {
-                if ($priceDataRow['price']) {
-                    $originalPrice = $priceDataRow['price'];
-                }
-                if ($priceDataRow['final_price']) {
-                    $originalPrice = $priceDataRow['final_price'];
-                }
-            }
+            $originalPrice = $priceModifier->getOriginalPrice($priceDataRow);
+            $price         = $priceModifier->getPrice($priceDataRow);
 
             $indexData[$productId]['price'][] = [
-                'price'             => $finalPrice,
-                'original_price'    => $originalPrice,
-                'is_discount'       => $finalPrice < $originalPrice,
-                'customer_group_id' => $priceDataRow['customer_group_id'],
+                'price'             => (float) $price,
+                'original_price'    => (float) $originalPrice,
+                'is_discount'       => $price < $originalPrice,
+                'customer_group_id' => (int) $priceDataRow['customer_group_id'],
+                'tax_class_id'      => (int) $priceDataRow['tax_class_id'],
+                'final_price'       => (float) $priceDataRow['final_price'],
+                'min_price'         => (float) $priceDataRow['min_price'],
+                'max_price'         => (float) $priceDataRow['max_price'],
             ];
+
+            if (!isset($indexData[$productId]['indexed_attributes'])) {
+                $indexData[$productId]['indexed_attributes'] = ['price'];
+            } elseif (!in_array('price', $indexData[$productId]['indexed_attributes'])) {
+                // Add price only one time.
+                $indexData[$productId]['indexed_attributes'][] = 'price';
+            }
         }
 
         return $indexData;
     }
 
     /**
-     * Price into indexed is not reliable for composite type.
-     * This method detects this.
+     * Retur
+     * @param string $typeId Product type id.
      *
-     * @param string $productTypeId Product type id.
-     *
-     * @return boolean
+     * @return PriceData\PriceDataReaderInterface
      */
-    private function isOriginalPriceReliable($productTypeId)
+    private function getPriceDataReader($typeId)
     {
-        return !in_array($productTypeId, $this->productType->getCompositeTypes());
+        $priceModifier = $this->priceReaderPool['default'];
+
+        if (isset($this->priceReaderPool[$typeId])) {
+            $priceModifier = $this->priceReaderPool[$typeId];
+        }
+
+        return $priceModifier;
     }
 }

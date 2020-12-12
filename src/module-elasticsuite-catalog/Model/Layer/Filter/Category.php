@@ -2,21 +2,21 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Layer\Filter;
 
-use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
-
 /**
  * Product category filter implementation.
+ *
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  *
  * @category Smile
  * @package  Smile\ElasticsuiteCatalog
@@ -24,6 +24,11 @@ use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
  */
 class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
 {
+    /**
+     * Configuration path for URL rewrite usage.
+     */
+    const XML_CATEGORY_FILTER_USE_URL_REWRITE = 'smile_elasticsuite_catalogsearch_settings/catalogsearch/category_filter_use_url_rewrites';
+
     /**
      * @var \Magento\Catalog\Model\Layer\Filter\DataProvider\Category
      */
@@ -45,9 +50,15 @@ class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
     private $childrenCategories;
 
     /**
+     * @var \Smile\ElasticsuiteCore\Api\Search\ContextInterface
+     */
+    private $searchContext;
+
+    /**
      * Constructor.
      *
      * @SuppressWarnings(PHPMD.BooleanArgumentFlag)
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      *
      * @param \Magento\Catalog\Model\Layer\Filter\ItemFactory                  $filterItemFactory   Filter item factory.
      * @param \Magento\Store\Model\StoreManagerInterface                       $storeManager        Store manager.
@@ -55,6 +66,8 @@ class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
      * @param \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder             $itemDataBuilder     Item data builder.
      * @param \Magento\Framework\Escaper                                       $escaper             HTML escaper.
      * @param \Magento\Catalog\Model\Layer\Filter\DataProvider\CategoryFactory $dataProviderFactory Data provider.
+     * @param \Magento\Framework\App\Config\ScopeConfigInterface               $scopeConfig         Scope configuration.
+     * @param \Smile\ElasticsuiteCore\Api\Search\ContextInterface              $context             Search Context.
      * @param boolean                                                          $useUrlRewrites      Uses URLs rewrite for rendering.
      * @param array                                                            $data                Custom data.
      */
@@ -65,22 +78,29 @@ class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
         \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder $itemDataBuilder,
         \Magento\Framework\Escaper $escaper,
         \Magento\Catalog\Model\Layer\Filter\DataProvider\CategoryFactory $dataProviderFactory,
+        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        \Smile\ElasticsuiteCore\Api\Search\ContextInterface $context,
         $useUrlRewrites = false,
         array $data = []
     ) {
-            parent::__construct(
-                $filterItemFactory,
-                $storeManager,
-                $layer,
-                $itemDataBuilder,
-                $escaper,
-                $dataProviderFactory,
-                $data
-            );
+        parent::__construct(
+            $filterItemFactory,
+            $storeManager,
+            $layer,
+            $itemDataBuilder,
+            $escaper,
+            $dataProviderFactory,
+            $data
+        );
 
-            $this->escaper        = $escaper;
-            $this->dataProvider   = $dataProviderFactory->create(['layer' => $this->getLayer()]);
-            $this->useUrlRewrites = $useUrlRewrites;
+        $this->escaper        = $escaper;
+        $this->dataProvider   = $dataProviderFactory->create(['layer' => $this->getLayer()]);
+        $this->searchContext  = $context;
+        $this->useUrlRewrites = ($useUrlRewrites === true) ? (bool) $scopeConfig->isSetFlag(
+            self::XML_CATEGORY_FILTER_USE_URL_REWRITE,
+            \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
+            $storeManager->getStore()->getId()
+        ) : false;
     }
 
     /**
@@ -95,29 +115,13 @@ class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
 
             $category = $this->dataProvider->getCategory();
 
+            $this->searchContext->setCurrentCategory($category);
             $this->applyCategoryFilterToCollection($category);
 
             if ($request->getParam('id') != $category->getId() && $this->dataProvider->isValid()) {
                 $this->getLayer()->getState()->addFilter($this->_createItem($category->getName(), $categoryId));
             }
         }
-
-        return $this;
-    }
-
-    /**
-     * Append the facet to the product collection.
-     *
-     * @return $this
-     */
-    public function addFacetToCollection()
-    {
-        $facetField  = $this->getFilterField();
-        $facetType   = BucketInterface::TYPE_TERM;
-        $facetConfig = ['size' => 0];
-
-        $productCollection = $this->getLayer()->getProductCollection();
-        $productCollection->addFacet($facetField, $facetType, $facetConfig);
 
         return $this;
     }
@@ -133,7 +137,7 @@ class Category extends \Magento\CatalogSearch\Model\Layer\Filter\Category
 
         /** @var \Magento\CatalogSearch\Model\ResourceModel\Fulltext\Collection $productCollection */
         $productCollection = $this->getLayer()->getProductCollection();
-        $optionsFacetedData = $productCollection->getFacetedData($this->getFilterField());
+        $optionsFacetedData = $productCollection->getFacetedData('categories');
 
         $currentCategory = $this->dataProvider->getCategory();
         $categories = $this->getChildrenCategories();

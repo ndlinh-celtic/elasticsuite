@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -35,11 +35,6 @@ class Request implements RequestInterface
     /**
      * @var string
      */
-    private $type;
-
-    /**
-     * @var string
-     */
     private $queryText;
 
     /**
@@ -51,14 +46,12 @@ class Request implements RequestInterface
      * Constructor.
      *
      * @param string $index           Spellcheck request index name.
-     * @param string $type            Spellcheck request document type.
      * @param string $queryText       Spellcheck fulltext query.
      * @param float  $cutoffFrequency Spellcheck cutoff frequency (used to detect stopwords).
      */
-    public function __construct($index, $type, $queryText, $cutoffFrequency)
+    public function __construct($index, $queryText, $cutoffFrequency)
     {
         $this->index           = $index;
-        $this->type            = $type;
         $this->queryText       = $queryText;
         $this->cufoffFrequency = $cutoffFrequency;
     }
@@ -69,14 +62,6 @@ class Request implements RequestInterface
     public function getIndex()
     {
         return $this->index;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function getType()
-    {
-        return $this->type;
     }
 
     /**

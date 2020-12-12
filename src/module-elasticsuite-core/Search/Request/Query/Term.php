@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -17,7 +17,7 @@ namespace Smile\ElasticsuiteCore\Search\Request\Query;
 use Smile\ElasticsuiteCore\Search\Request\QueryInterface;
 
 /**
- * Elastic suite request term query.
+ * ElasticSuite request term query.
  *
  * @category Smile
  * @package  Smile\ElasticsuiteCore
@@ -46,7 +46,7 @@ class Term implements QueryInterface
     private $field;
 
     /**
-     * The term query produce an ElasticSearch term query.
+     * The term query produce an Elasticsearch term query.
      *
      * @param string  $value Search value.
      * @param string  $field Search field.

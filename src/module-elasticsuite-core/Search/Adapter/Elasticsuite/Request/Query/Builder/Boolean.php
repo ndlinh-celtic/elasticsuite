@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -31,19 +31,26 @@ class Boolean extends AbstractComplexBuilder implements BuilderInterface
     const QUERY_CONDITION_SHOULD = 'should';
 
     /**
+     * @var array
+     */
+    private $booleanClauses = [
+        self::QUERY_CONDITION_MUST,
+        self::QUERY_CONDITION_NOT,
+        self::QUERY_CONDITION_SHOULD,
+    ];
+
+    /**
      * {@inheritDoc}
      */
     public function buildQuery(QueryInterface $query)
     {
+        if ($query->getType() !== QueryInterface::TYPE_BOOL) {
+            throw new \InvalidArgumentException("Query builder : invalid query type {$query->getType()}");
+        }
+
         $searchQuery = [];
 
-        $clauses = [
-            self::QUERY_CONDITION_MUST,
-            self::QUERY_CONDITION_NOT,
-            self::QUERY_CONDITION_SHOULD,
-        ];
-
-        foreach ($clauses as $clause) {
+        foreach ($this->booleanClauses as $clause) {
             $queries = array_map(
                 [$this->parentBuilder, 'buildQuery'],
                 $this->getQueryClause($query, $clause)
@@ -51,8 +58,19 @@ class Boolean extends AbstractComplexBuilder implements BuilderInterface
             $searchQuery[$clause] = array_filter($queries);
         }
 
-        $searchQuery['minimum_should_match'] = $query->getMinimumShouldMatch();
-        $searchQuery['boost'] = $query->getBoost();
+        if (!empty($searchQuery[self::QUERY_CONDITION_SHOULD])) {
+            $searchQuery['minimum_should_match'] = $query->getMinimumShouldMatch();
+        }
+
+        $searchQuery['boost']                = $query->getBoost();
+
+        if ($query->isCached()) {
+            $searchQuery['_cache'] = true;
+        }
+
+        if ($query->getName()) {
+            $searchQuery['_name'] = $query->getName();
+        }
 
         return ['bool' => $searchQuery];
     }

@@ -2,21 +2,22 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Search\Request\Aggregation\Bucket;
 
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
-use Magento\Framework\Search\Request\Aggregation\Metric;
 use Smile\ElasticsuiteCore\Search\Request\QueryInterface;
+use Smile\ElasticsuiteCore\Search\Request\MetricInterface;
+use Smile\ElasticsuiteCore\Search\Request\PipelineInterface;
 
 /**
  * Abstract bucket implementation.
@@ -37,9 +38,19 @@ abstract class AbstractBucket implements BucketInterface
     private $field;
 
     /**
-     * @var Metric[]
+     * @var MetricInterface[]
      */
     private $metrics;
+
+    /**
+     * @var BucketInterface[]
+     */
+    private $childBuckets;
+
+    /**
+     * @var PipelineInterface[]
+     */
+    private $pipelines;
 
     /**
      * @var string
@@ -59,17 +70,21 @@ abstract class AbstractBucket implements BucketInterface
     /**
      * Constructor.
      *
-     * @param string         $name         Bucket name.
-     * @param string         $field        Bucket field.
-     * @param Metric[]       $metrics      Bucket metrics.
-     * @param string         $nestedPath   Nested path for nested bucket.
-     * @param QueryInterface $filter       Bucket filter.
-     * @param QueryInterface $nestedFilter Nested filter for the bucket.
+     * @param string              $name         Bucket name.
+     * @param string              $field        Bucket field.
+     * @param MetricInterface[]   $metrics      Bucket metrics.
+     * @param BucketInterface[]   $childBuckets Child buckets.
+     * @param PipelineInterface[] $pipelines    Bucket pipelines.
+     * @param string              $nestedPath   Nested path for nested bucket.
+     * @param QueryInterface      $filter       Bucket filter.
+     * @param QueryInterface      $nestedFilter Nested filter for the bucket.
      */
     public function __construct(
         $name,
         $field,
-        array $metrics,
+        array $metrics = [],
+        array $childBuckets = [],
+        array $pipelines = [],
         $nestedPath = null,
         QueryInterface $filter = null,
         QueryInterface $nestedFilter = null
@@ -77,6 +92,8 @@ abstract class AbstractBucket implements BucketInterface
         $this->name         = $name;
         $this->field        = $field;
         $this->metrics      = $metrics;
+        $this->childBuckets = $childBuckets;
+        $this->pipelines    = $pipelines;
         $this->nestedPath   = $nestedPath;
         $this->filter       = $filter;
         $this->nestedFilter = $nestedFilter;
@@ -137,5 +154,21 @@ abstract class AbstractBucket implements BucketInterface
     public function getFilter()
     {
         return $this->filter;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getChildBuckets()
+    {
+        return $this->childBuckets;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getPipelines()
+    {
+        return $this->pipelines;
     }
 }

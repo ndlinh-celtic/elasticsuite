@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteVirtualCategory
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -42,7 +41,8 @@ class SaveProductsPositions extends AbstractIndexerPlugin
      *
      * @param \Magento\Framework\Indexer\IndexerRegistry                                       $indexerRegistry The indexer registry.
      * @param FullIndexer                                                                      $fullIndexer     The Full Indexer
-     * @param \Smile\ElasticsuiteVirtualCategory\Model\ResourceModel\Category\Product\Position $saveHandler     Product position save handler.
+     * @param \Smile\ElasticsuiteVirtualCategory\Model\ResourceModel\Category\Product\Position $saveHandler     Product position
+     *                                                                                                          save handler.
      * @param \Magento\Framework\Json\Helper\Data                                              $jsonHelper      JSON Helper.
      */
     public function __construct(
@@ -100,16 +100,44 @@ class SaveProductsPositions extends AbstractIndexerPlugin
      */
     private function getAffectedProductIds($category)
     {
-        $oldPositionProductIds = array_keys($this->saveHandler->getProductPositionsByCategory($category));
-        $newPositionProductIds = array_keys($category->getSortedProducts());
+        $oldPositionProductIds     = array_keys($this->saveHandler->getProductPositionsByCategory($category));
+        $defaultPositionProductIds = [];
+        $newPositionProductIds     = array_keys($category->getSortedProducts());
 
-        $affectedProductIds = array_merge($oldPositionProductIds, $newPositionProductIds);
+        $oldBlacklistedProductIds     = array_values($this->saveHandler->getProductBlacklistByCategory($category));
+        $defaultBlacklistedProductIds = [];
+        $newBlacklistedProductIds     = array_values($category->getBlacklistedProducts() ?? []);
+
+        if (true === (bool) $category->getUseStorePositions()) {
+            $defaultPositionProductIds = array_keys(
+                $this->saveHandler->getProductPositions(
+                    $category->getId(),
+                    \Magento\Store\Model\Store::DEFAULT_STORE_ID
+                )
+            );
+
+            $defaultBlacklistedProductIds = array_values(
+                $this->saveHandler->getProductBlacklist(
+                    $category->getId(),
+                    \Magento\Store\Model\Store::DEFAULT_STORE_ID
+                )
+            );
+        }
+
+        $affectedProductIds = array_merge(
+            $oldPositionProductIds,
+            $defaultPositionProductIds,
+            $newPositionProductIds,
+            $oldBlacklistedProductIds,
+            $defaultBlacklistedProductIds,
+            $newBlacklistedProductIds
+        );
 
         if ($category->getAffectedProductIds()) {
             $affectedProductIds = array_merge($affectedProductIds, $category->getAffectedProductIds());
         }
 
-        return $affectedProductIds;
+        return array_unique($affectedProductIds);
     }
 
     /**

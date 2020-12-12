@@ -1,22 +1,30 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCatalog\Model\Layer\Filter;
 
+/**
+ * Decimal filter model methods.
+ *
+ * @category Smile
+ * @package  Smile\ElasticsuiteCatalog
+ * @author   Romain Ruaud <romain.ruaud@smile.fr>
+ */
 trait DecimalFilterTrait
 {
     /**
-     * Apply decimal range filter
+     * Apply price range filter
      *
      * @param \Magento\Framework\App\RequestInterface $request The request
      *
@@ -43,9 +51,11 @@ trait DecimalFilterTrait
                 list($fromValue, $toValue) = $filter;
                 $this->setCurrentValue(['from' => $fromValue, 'to' => $toValue]);
 
+                $bounds = array_filter(['gte' => $fromValue, 'lt' => $toValue]);
+
                 $this->getLayer()->getProductCollection()->addFieldToFilter(
                     $this->getAttributeModel()->getAttributeCode(),
-                    ['from' => $fromValue, 'to' => $toValue]
+                    $this->getRangeCondition($bounds)
                 );
 
                 $this->getLayer()->getState()->addFilter(

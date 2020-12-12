@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalogRule
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalogRule\Model\Rule\Condition\Product;
@@ -39,6 +38,11 @@ class QueryBuilder
     private $attributeList;
 
     /**
+     * @var SpecialAttributesProvider
+     */
+    private $specialAttributesProvider;
+
+    /**
      * @var NestedFilterInterface[]
      */
     private $nestedFilters;
@@ -46,15 +50,21 @@ class QueryBuilder
     /**
      * Constructor.
      *
-     * @param AttributeList           $attributeList Search rule product attributes list
-     * @param QueryFactory            $queryFactory  Search query factory.
-     * @param NestedFilterInterface[] $nestedFilters Filters applied to nested fields during query building.
+     * @param AttributeList             $attributeList             Search rule product attributes list
+     * @param QueryFactory              $queryFactory              Search query factory.
+     * @param SpecialAttributesProvider $specialAttributesProvider Special Attributes Provider.
+     * @param NestedFilterInterface[]   $nestedFilters             Filters applied to nested fields during query building.
      */
-    public function __construct(AttributeList $attributeList, QueryFactory $queryFactory, $nestedFilters = [])
-    {
-        $this->queryFactory  = $queryFactory;
-        $this->attributeList = $attributeList;
-        $this->nestedFilters = $nestedFilters;
+    public function __construct(
+        AttributeList $attributeList,
+        QueryFactory $queryFactory,
+        SpecialAttributesProvider $specialAttributesProvider,
+        $nestedFilters = []
+    ) {
+        $this->queryFactory              = $queryFactory;
+        $this->attributeList             = $attributeList;
+        $this->specialAttributesProvider = $specialAttributesProvider;
+        $this->nestedFilters             = $nestedFilters;
     }
 
     /**
@@ -68,17 +78,18 @@ class QueryBuilder
     {
         $query = null;
 
-        $this->prepareFieldValue($productCondition);
+        $query = $this->getSpecialAttributesSearchQuery($productCondition);
 
-        if (!empty($productCondition->getValue())) {
+        if ($query === null && !empty($productCondition->getValue())) {
+            $this->prepareFieldValue($productCondition);
             $queryType   = QueryInterface::TYPE_TERMS;
             $queryParams = $this->getTermsQueryParams($productCondition);
 
-            if ($productCondition->getInputType() === 'string') {
-                $queryType = QueryInterface::TYPE_MATCH;
+            if ($productCondition->getInputType() === 'string' && !in_array($productCondition->getOperator(), ['()', '!()'])) {
+                $queryType   = QueryInterface::TYPE_MATCH;
                 $queryParams = $this->getMatchQueryParams($productCondition);
             } elseif (in_array($productCondition->getOperator(), ['>=', '>', '<=', '<'])) {
-                $queryType = QueryInterface::TYPE_RANGE;
+                $queryType   = QueryInterface::TYPE_RANGE;
                 $queryParams = $this->getRangeQueryParams($productCondition);
             }
 
@@ -91,11 +102,11 @@ class QueryBuilder
             $field = $this->getSearchField($productCondition);
 
             if ($field->isNested()) {
-                $nestedPath = $field->getNestedPath();
+                $nestedPath        = $field->getNestedPath();
                 $nestedQueryParams = ['query' => $query, 'path' => $nestedPath];
 
                 if (isset($this->nestedFilters[$nestedPath])) {
-                    $nestedFilterClauses = [];
+                    $nestedFilterClauses           = [];
                     $nestedFilterClauses['must'][] = $this->nestedFilters[$nestedPath]->getFilter();
                     $nestedFilterClauses['must'][] = $nestedQueryParams['query'];
 
@@ -106,6 +117,43 @@ class QueryBuilder
 
                 $query = $this->queryFactory->create(QueryInterface::TYPE_NESTED, $nestedQueryParams);
             }
+        }
+
+        return $query;
+    }
+
+    /**
+     * Create a query for special attribute.
+     *
+     * @param ProductCondition $productCondition Product condition.
+     *
+     * @return NULL|\Smile\ElasticsuiteCore\Search\Request\QueryInterface
+     */
+    private function getSpecialAttributesSearchQuery(ProductCondition $productCondition)
+    {
+        $query = null;
+
+        if ($productCondition->getAttribute() === 'sku') {
+            $queryParams = [];
+            $fieldName   = $this->getSearchFieldName($productCondition);
+
+            // SKU values can be an array of value, due to the picker.
+            foreach (explode(',', $productCondition->getValue()) as $value) {
+                // We add all of these values as a should match sub query.
+                $queryParams['should'][] = $this->prepareQuery(
+                    QueryInterface::TYPE_MATCH,
+                    ['field' => $fieldName, 'queryText' => trim($value), 'minimumShouldMatch' => "100%"]
+                );
+            }
+
+            // One clause must match between all.
+            $queryParams['minimumShouldMatch'] = 1;
+            $query = $this->prepareQuery(QueryInterface::TYPE_BOOL, $queryParams);
+        }
+
+        if (in_array($productCondition->getAttribute(), array_keys($this->specialAttributesProvider->getList()))) {
+            $specialAttribute = $this->specialAttributesProvider->getAttribute($productCondition->getAttribute());
+            $query            = $specialAttribute->getSearchQuery();
         }
 
         return $query;
@@ -167,11 +215,16 @@ class QueryBuilder
      */
     private function getTermsQueryParams(ProductCondition $productCondition)
     {
+        $field     = $this->getSearchField($productCondition);
         $fieldName = $this->getSearchFieldName($productCondition);
         $values    = $productCondition->getValue();
 
         if (!is_array($values) && in_array($productCondition->getOperator(), ['()', '!()'])) {
             $values = explode(',', $values);
+        }
+
+        if ($field->getType() == FieldInterface::FIELD_TYPE_BOOLEAN) {
+            $values = (bool) $values;
         }
 
         return ['field' => $fieldName, 'values' => $values];
@@ -207,7 +260,7 @@ class QueryBuilder
      *
      * @param ProductCondition $productCondition Product condition.
      *
-     * @return \Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\FieldInterface
+     * @return \Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface
      */
     private function getSearchField(ProductCondition $productCondition)
     {
@@ -216,7 +269,7 @@ class QueryBuilder
         return $field;
     }
 
-     /**
+    /**
      * Retrieve ES mapping field name used for the current condition (including analyzer).
      *
      * @param ProductCondition $productCondition Product condition.
@@ -225,11 +278,13 @@ class QueryBuilder
      */
     private function getSearchFieldName(ProductCondition $productCondition)
     {
-        $field    = $this->attributeList->getField($productCondition->getAttribute());
+        $attributeName = $productCondition->getAttribute();
+
+        $field    = $this->attributeList->getField($attributeName);
         $analyzer = FieldInterface::ANALYZER_UNTOUCHED;
 
-        if ($productCondition->getInputType() === "string") {
-            $analyzer = FieldInterface::ANALYZER_STANDARD;
+        if ($productCondition->getInputType() === "string" && !in_array($productCondition->getOperator(), ['()', '!()'])) {
+            $analyzer = $field->getDefaultSearchAnalyzer();
         }
 
         return $field->getMappingProperty($analyzer);

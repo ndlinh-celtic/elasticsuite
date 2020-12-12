@@ -5,15 +5,14 @@
  *
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  * @author    Romain RUAUD <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
  -->
@@ -36,26 +35,11 @@
     </xs:complexType>
 
     <xs:complexType name="typeDefinition">
-        <xs:sequence>
-            <xs:element name="datasources" type="datasourcesDefinition" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:all>
             <xs:element name="mapping" type="mappingDefinition"/>
-        </xs:sequence>
+        </xs:all>
         <xs:attribute type="xs:string" name="name" use="required"/>
         <xs:attribute type="xs:string" name="idFieldName" use="required"/>
-    </xs:complexType>
-
-    <xs:complexType name="datasourcesDefinition">
-        <xs:sequence maxOccurs="unbounded" minOccurs="1">
-            <xs:element name="datasource" type="datasourceDefinition" />
-        </xs:sequence>
-    </xs:complexType>
-
-    <xs:complexType name="datasourceDefinition">
-        <xs:simpleContent>
-            <xs:extension base="xs:string">
-                <xs:attribute type="xs:string" name="name" use="required"/>
-            </xs:extension>
-        </xs:simpleContent>
     </xs:complexType>
 
     <xs:complexType name="mappingDefinition">

@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\Reader;
@@ -56,7 +57,6 @@ class ContainerStore
      * @param Container             $containerReader   Parent level configuration reader
      * @param StoreManagerInterface $storeManager      Magento Store Manager interface
      *
-     * @internal param \Magento\Framework\App\Config\ScopePool $scopePool Scoped Configuration reader
      */
     public function __construct(
         Initial $initialConfig,

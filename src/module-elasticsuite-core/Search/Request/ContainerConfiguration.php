@@ -1,14 +1,14 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -24,7 +24,7 @@ use Smile\ElasticsuiteCore\Api\Search\Request\Container\RelevanceConfigurationIn
 /**
  * Search request container configuration implementation.
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -97,14 +97,6 @@ class ContainerConfiguration implements ContainerConfigurationInterface
     /**
      * {@inheritDoc}
      */
-    public function getTypeName()
-    {
-        return $this->readBaseConfigParam('type');
-    }
-
-    /**
-     * {@inheritDoc}
-     */
     public function getLabel()
     {
         return $this->readBaseConfigParam('label');
@@ -115,10 +107,7 @@ class ContainerConfiguration implements ContainerConfigurationInterface
      */
     public function getMapping()
     {
-        $typeName = $this->getTypeName();
-        $type     = $this->getIndex()->getType($typeName);
-
-        return $type->getMapping();
+        return $this->getIndex()->getMapping();
     }
 
     /**
@@ -138,15 +127,58 @@ class ContainerConfiguration implements ContainerConfigurationInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function getFilters()
+    {
+        $filters = [];
+
+        /** @var \Smile\ElasticsuiteCore\Api\Search\Request\Container\FilterInterface $filter */
+        foreach ($this->readBaseConfigParam('filters', []) as $filter) {
+            // Not using the filter name as array key, to prevent collision with filters added via addFieldToFilter.
+            $filters[] = $filter->getFilterQuery();
+        }
+
+        return array_filter($filters);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getAggregations($query = null, $filters = [], $queryFilters = [])
+    {
+        $aggregations = $this->readBaseConfigParam('aggregations', []);
+
+        /** @var \Smile\ElasticsuiteCore\Api\Search\Request\ContainerConfiguration\AggregationProviderInterface $provider */
+        foreach ($this->readBaseConfigParam('aggregationsProviders', []) as $provider) {
+            $aggregations = array_merge(
+                $aggregations,
+                $provider->getAggregations($this->getStoreId(), $query, $filters, $queryFilters)
+            );
+        }
+
+        return $aggregations;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getTrackTotalHits()
+    {
+        return $this->readBaseConfigParam('track_total_hits');
+    }
+
+    /**
      * Read configuration param from base config.
      *
-     * @param string $param Param name.
-     *
+     * @param string $param   Param name.
+     * @param mixed  $default Default value if not set.
+      *
      * @return mixed
      */
-    private function readBaseConfigParam($param)
+    private function readBaseConfigParam($param, $default = null)
     {
-        return $this->baseConfig->get($this->containerName . '/' . $param);
+        return $this->baseConfig->get($this->containerName . '/' . $param) ?? $default;
     }
 
     /**

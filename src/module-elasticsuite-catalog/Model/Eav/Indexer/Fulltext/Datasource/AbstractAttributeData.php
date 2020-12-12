@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -16,7 +17,8 @@ namespace Smile\ElasticsuiteCatalog\Model\Eav\Indexer\Fulltext\Datasource;
 use Magento\Eav\Model\Entity\Attribute\AttributeInterface;
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Eav\Indexer\Fulltext\Datasource\AbstractAttributeData as ResourceModel;
 use Smile\ElasticsuiteCore\Index\Mapping\FieldFactory;
-use Smile\ElasticsuiteCatalog\Helper\Attribute as ProductAttributeHelper;
+use Smile\ElasticsuiteCatalog\Helper\AbstractAttribute as AttributeHelper;
+use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
 
 /**
  * Abstract Datasource for EAV entities
@@ -25,7 +27,7 @@ use Smile\ElasticsuiteCatalog\Helper\Attribute as ProductAttributeHelper;
  * @package  Smile\ElasticsuiteCatalog
  * @author   Romain Ruaud <romain.ruaud@smile.fr>
  */
-class AbstractAttributeData
+abstract class AbstractAttributeData
 {
     /**
      * @var array
@@ -38,7 +40,7 @@ class AbstractAttributeData
     protected $attributeIdsByTable = [];
 
     /**
-     * @var \Smile\ElasticsuiteCatalog\Helper\Attribute
+     * @var \Smile\ElasticsuiteCatalog\Helper\AbstractAttribute
      */
     protected $attributeHelper;
 
@@ -61,26 +63,27 @@ class AbstractAttributeData
      * @var array
      */
     protected $indexedBackendModels = [
-        'Magento\Eav\Model\Entity\Attribute\Backend\ArrayBackend',
-        'Magento\Eav\Model\Entity\Attribute\Backend\Datetime',
-        'Magento\Catalog\Model\Attribute\Backend\Startdate',
-        'Magento\Catalog\Model\Product\Attribute\Backend\Boolean',
-        'Magento\Eav\Model\Entity\Attribute\Backend\DefaultBackend',
-        'Magento\Catalog\Model\Product\Attribute\Backend\Weight',
+        \Magento\Eav\Model\Entity\Attribute\Backend\ArrayBackend::class,
+        \Magento\Eav\Model\Entity\Attribute\Backend\Datetime::class,
+        \Magento\Catalog\Model\Attribute\Backend\Startdate::class,
+        \Magento\Catalog\Model\Product\Attribute\Backend\Boolean::class,
+        \Magento\Eav\Model\Entity\Attribute\Backend\DefaultBackend::class,
+        \Magento\Catalog\Model\Product\Attribute\Backend\Weight::class,
+        \Magento\Catalog\Model\Product\Attribute\Backend\Price::class,
     ];
 
     /**
      * Constructor
      *
-     * @param ResourceModel          $resourceModel        Resource model.
-     * @param FieldFactory           $fieldFactory         Mapping field factory.
-     * @param ProductAttributeHelper $attributeHelper      Attribute helper.
-     * @param array                  $indexedBackendModels List of indexed backend models added to the default list.
+     * @param ResourceModel   $resourceModel        Resource model.
+     * @param FieldFactory    $fieldFactory         Mapping field factory.
+     * @param AttributeHelper $attributeHelper      Attribute helper.
+     * @param array           $indexedBackendModels List of indexed backend models added to the default list.
      */
     public function __construct(
         ResourceModel $resourceModel,
         FieldFactory $fieldFactory,
-        ProductAttributeHelper $attributeHelper,
+        AttributeHelper $attributeHelper,
         array $indexedBackendModels = []
     ) {
         $this->resourceModel   = $resourceModel;
@@ -139,6 +142,11 @@ class AbstractAttributeData
 
                 $this->initField($attribute);
             }
+
+            if ($attribute->getAttributeCode() === 'sku') {
+                // SKU has no backend table.
+                $this->initField($attribute);
+            }
         }
 
         return $this;
@@ -153,10 +161,16 @@ class AbstractAttributeData
      */
     private function canIndexAttribute(AttributeInterface $attribute)
     {
-        $canIndex = $attribute->getBackendType() != 'static';
+        // 'price' attribute is declared as nested field into the indices file.
+        $canIndex = $attribute->getBackendType() != 'static' && $attribute->getAttributeCode() !== 'price';
 
         if ($canIndex && $attribute->getBackendModel()) {
-            $canIndex = in_array($attribute->getBackendModel(), $this->indexedBackendModels);
+            foreach ($this->indexedBackendModels as $indexedBackendModel) {
+                $canIndex = is_a($attribute->getBackendModel(), $indexedBackendModel, true);
+                if ($canIndex) {
+                    return $canIndex;
+                }
+            }
         }
 
         return $canIndex;
@@ -176,13 +190,12 @@ class AbstractAttributeData
 
         if ($attribute->usesSource()) {
             $optionFieldName = $this->attributeHelper->getOptionTextFieldName($fieldName);
-            $fieldType = 'string';
+            $fieldType = FieldInterface::FIELD_TYPE_TEXT;
             $fieldOptions = ['name' => $optionFieldName, 'type' => $fieldType, 'fieldConfig' => $fieldConfig];
             $this->fields[$optionFieldName] = $this->fieldFactory->create($fieldOptions);
 
             // Reset parent field values : only the option text field should be used for spellcheck and autocomplete.
             $fieldConfig['is_used_in_spellcheck'] = false;
-            $fieldConfig['is_used_in_autocomplete'] = false;
             $fieldConfig['is_searchable'] = false;
         }
 

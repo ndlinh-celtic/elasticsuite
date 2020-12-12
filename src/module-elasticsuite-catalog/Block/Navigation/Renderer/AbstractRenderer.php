@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Block\Navigation\Renderer;
@@ -16,6 +16,7 @@ namespace Smile\ElasticsuiteCatalog\Block\Navigation\Renderer;
 use Magento\LayeredNavigation\Block\Navigation\FilterRendererInterface;
 use Magento\Catalog\Model\Layer\Filter\FilterInterface;
 use Magento\Framework\View\Element\Template;
+use \Magento\Catalog\Helper\Data as CatalogHelper;
 
 /**
  * Abstract facet renderer block.
@@ -32,14 +33,37 @@ abstract class AbstractRenderer extends Template implements FilterRendererInterf
     private $filter;
 
     /**
+     * @var CatalogHelper
+     */
+    private $catalogHelper;
+
+    /**
+     * Constructor.
+     *
+     * @param Template\Context $context       Block context.
+     * @param CatalogHelper    $catalogHelper Catalog helper.
+     * @param array            $data          Additionnal block data.
+     */
+    public function __construct(Template\Context $context, CatalogHelper $catalogHelper, array $data = [])
+    {
+        parent::__construct($context, $data);
+        $this->catalogHelper = $catalogHelper;
+    }
+
+
+    /**
      * {@inheritDoc}
      */
     public function render(FilterInterface $filter)
     {
+        $html         = '';
         $this->filter = $filter;
-        $this->assign('filterItems', $filter->getItems());
-        $html = $this->_toHtml();
-        $this->assign('filterItems', []);
+
+        if ($this->canRenderFilter()) {
+            $this->assign('filterItems', $filter->getItems());
+            $html = $this->_toHtml();
+            $this->assign('filterItems', []);
+        }
 
         return $html;
     }
@@ -53,19 +77,13 @@ abstract class AbstractRenderer extends Template implements FilterRendererInterf
     }
 
     /**
-     * @SuppressWarnings(PHPMD.CamelCaseMethodName)
+     * Indicates if the product count should be displayed or not.
      *
-     * {@inheritDoc}
+     * @return boolean
      */
-    protected function _toHtml()
+    public function displayProductCount()
     {
-        $html = false;
-
-        if ($this->canRenderFilter()) {
-            $html = parent::_toHtml();
-        }
-
-        return $html;
+        return $this->catalogHelper->shouldDisplayProductCountOnLayer();
     }
 
     /**

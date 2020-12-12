@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -41,17 +41,27 @@ class Standard implements SortOrderInterface
     private $direction;
 
     /**
+     * @var string
+     */
+    private $missing;
+
+    /**
      * Constructor.
      *
      * @param string $field     Sort order field.
      * @param string $direction Sort order direction.
      * @param string $name      Sort order name.
+     * @param string $missing   How to treat missing values.
      */
-    public function __construct($field, $direction, $name = null)
+    public function __construct($field, $direction = self::SORT_ASC, $name = null, $missing = null)
     {
-        $this->name      = $name;
         $this->field     = $field;
         $this->direction = $direction;
+        $this->name      = $name;
+        $this->missing   = $missing;
+        if ($this->missing === null) {
+            $this->missing = $direction == self::SORT_ASC ? self::MISSING_LAST : self::MISSING_FIRST;
+        }
     }
 
     /**
@@ -75,7 +85,7 @@ class Standard implements SortOrderInterface
      */
     public function getDirection()
     {
-        return $this->direction;
+        return $this->direction ?? self::SORT_ASC;
     }
 
     /**
@@ -84,5 +94,13 @@ class Standard implements SortOrderInterface
     public function getType()
     {
         return SortOrderInterface::TYPE_STANDARD;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getMissing()
+    {
+        return $this->missing;
     }
 }

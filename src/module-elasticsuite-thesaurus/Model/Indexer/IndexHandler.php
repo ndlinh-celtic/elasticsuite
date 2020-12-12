@@ -1,35 +1,36 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteThesaurus
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteThesaurus\Model\Indexer;
 
-use Smile\ElasticsuiteCore\Api\Client\ClientFactoryInterface;
+use Smile\ElasticsuiteCore\Api\Client\ClientInterface;
 use Smile\ElasticsuiteCore\Helper\IndexSettings as IndexSettingsHelper;
+use Smile\ElasticsuiteCore\Helper\Cache as CacheHelper;
 use Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface;
 use Smile\ElasticsuiteThesaurus\Model\Index as ThesaurusIndex;
 
 /**
  * Synonym index handler.
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteThesaurus
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
 class IndexHandler
 {
     /**
-     * @var \Elasticsearch\Client
+     * @var ClientInterface
      */
     private $client;
 
@@ -44,20 +45,28 @@ class IndexHandler
     private $indexManager;
 
     /**
+     * @var CacheHelper
+     */
+    private $cacheHelper;
+
+    /**
      * Constructor.
      *
-     * @param ClientFactoryInterface  $clientFactory       ES Client factory.
-     * @param IndexSettingsHelper     $indexSettingsHelper Index settings helper.
+     * @param ClientInterface         $client              ES client.
      * @param IndexOperationInterface $indexManager        ES index management tool
+     * @param IndexSettingsHelper     $indexSettingsHelper Index settings helper.
+     * @param CacheHelper             $cacheHelper         ES caching helper.
      */
     public function __construct(
-        ClientFactoryInterface $clientFactory,
+        ClientInterface $client,
+        IndexOperationInterface $indexManager,
         IndexSettingsHelper $indexSettingsHelper,
-        IndexOperationInterface $indexManager
+        CacheHelper $cacheHelper
     ) {
-        $this->client              = $clientFactory->createClient();
+        $this->client              = $client;
         $this->indexSettingsHelper = $indexSettingsHelper;
         $this->indexManager        = $indexManager;
+        $this->cacheHelper         = $cacheHelper;
     }
 
     /**
@@ -75,9 +84,9 @@ class IndexHandler
         $indexName       = $this->indexSettingsHelper->createIndexNameFromIdentifier($indexIdentifier, $storeId);
         $indexAlias      = $this->indexSettingsHelper->getIndexAliasFromIdentifier($indexIdentifier, $storeId);
         $indexSettings   = ['settings' => $this->getIndexSettings($synonyms, $expansions)];
-
-        $this->client->indices()->create(['index' => $indexName, 'body' => $indexSettings]);
+        $this->client->createIndex($indexName, $indexSettings);
         $this->indexManager->proceedIndexInstall($indexName, $indexAlias);
+        $this->cacheHelper->cleanIndexCache(ThesaurusIndex::INDEX_IDENTIER, $storeId);
     }
 
     /**
@@ -91,14 +100,22 @@ class IndexHandler
     private function getIndexSettings($synonyms, $expansions)
     {
         $settings = [
-            'number_of_shards'   => $this->indexSettingsHelper->getNumberOfShards(),
-            'number_of_replicas' => $this->indexSettingsHelper->getNumberOfReplicas(),
+            'number_of_shards'      => $this->indexSettingsHelper->getNumberOfShards(),
+            'number_of_replicas'    => $this->indexSettingsHelper->getNumberOfReplicas(),
+            'requests.cache.enable' => true,
         ];
 
         $settings['analysis']['filter']['shingle'] = [
-            'type' => 'shingle',
-            'output_false' => true,
-            'token_separator' => ThesaurusIndex::WORD_DELIMITER,
+            'type'             => 'shingle',
+            'output_false'     => true,
+            'token_separator'  => ThesaurusIndex::WORD_DELIMITER,
+            'max_shingle_size' => ThesaurusIndex::MAX_SIZE,
+        ];
+
+        $settings['max_shingle_diff'] = $this->indexSettingsHelper->getMaxShingleDiff($settings['analysis']);
+        $settings['analysis']['filter']['type_filter'] = [
+            'type' => 'keep_types',
+            'types' => [ "SYNONYM" ],
         ];
 
         $settings = $this->addAnalyzerSettings($settings, 'synonym', $synonyms);
@@ -119,8 +136,8 @@ class IndexHandler
     private function addAnalyzerSettings($settings, $type, $values)
     {
         $settings['analysis']['analyzer'][$type] = [
-            'tokenizer' => 'standard',
-            'filter' => ['lowercase', 'shingle'],
+            'tokenizer' => 'whitespace',
+            'filter' => ['lowercase'],
         ];
 
         if (!empty($values)) {
@@ -129,12 +146,15 @@ class IndexHandler
             $settings['analysis']['analyzer'][$type]['filter'][] = $type;
         }
 
+        $settings['analysis']['analyzer'][$type]['filter'][] = 'type_filter';
+        $settings['analysis']['analyzer'][$type]['filter'][] = 'shingle';
+
         return $settings;
     }
 
     /**
      * Prepare the thesaurus data to be saved.
-     * Spaces are replaced with "_" into multiwords expression (ex foo bar => foo_bar).
+     * Spaces and hyphens are replaced with "_" into multiwords expression (ex foo bar => foo_bar).
      *
      * @param string[] $rows Original thesaurus text rows.
      *
@@ -143,7 +163,7 @@ class IndexHandler
     private function prepareSynonymFilterData($rows)
     {
         $rowMaper = function ($row) {
-            return preg_replace('/([\w])\s(?=[\w])/', '\1-', $row);
+            return preg_replace('/([^\s-])[\s-]+(?=[^\s-])/u', '\1_', $row);
         };
 
         return array_map($rowMaper, $rows);

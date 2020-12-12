@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Block\Search\Form;
@@ -36,29 +37,21 @@ class Autocomplete extends \Magento\Framework\View\Element\Template
     private $jsonHelper;
 
     /**
-     * @var array
-     */
-    private $rendererList;
-
-    /**
      * Mini constructor.
      *
      * @param \Magento\Framework\View\Element\Template\Context $context      Block context
      * @param \Magento\Framework\Json\Helper\Data              $jsonHelper   JSON helper
      * @param \Magento\Framework\Locale\FormatInterface        $localeFormat Locale Format
      * @param array                                            $data         The data
-     * @param array                                            $rendererList The renderers used for autocomplete rendering
      */
     public function __construct(
         \Magento\Framework\View\Element\Template\Context $context,
         \Magento\Framework\Json\Helper\Data $jsonHelper,
         FormatInterface $localeFormat,
-        array $data,
-        array $rendererList = []
+        array $data
     ) {
         $this->jsonHelper   = $jsonHelper;
         $this->localeFormat = $localeFormat;
-        $this->rendererList = $rendererList;
 
         parent::__construct($context, $data);
     }
@@ -70,13 +63,7 @@ class Autocomplete extends \Magento\Framework\View\Element\Template
      */
     public function getSuggestRenderers()
     {
-        foreach ($this->rendererList as &$renderer) {
-            if (isset($renderer['title'])) {
-                $renderer['title'] = __($renderer['title']);
-            }
-        }
-
-        return $this->rendererList;
+        return $this->getData('rendererList');
     }
 
     /**

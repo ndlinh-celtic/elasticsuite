@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -19,7 +19,7 @@ use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
 use Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Request\Query\Builder as QueryBuilder;
 
 /**
- * Build ElasticSearch sort orders from search request specification interface.
+ * Build Elasticsearch sort orders from search request specification interface.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
@@ -67,18 +67,19 @@ class Builder
     {
         $sortField = $sortOrder->getField();
 
-        $sortOrderConfig = [
-            'order'         => $sortOrder->getDirection(),
-            'missing'       => $sortOrder->getDirection() == SortOrderInterface::SORT_ASC ? '_last' : '_first',
-            'unmapped_type' => FieldInterface::FIELD_TYPE_STRING,
-        ];
+        $sortOrderConfig = ['order' => $sortOrder->getDirection()];
+
+        if ($sortField !== SortOrderInterface::DEFAULT_SORT_FIELD) {
+            $sortOrderConfig['missing']       = $sortOrder->getMissing();
+            $sortOrderConfig['unmapped_type'] = FieldInterface::FIELD_TYPE_KEYWORD;
+        }
 
         if ($sortOrder->getType() == SortOrderInterface::TYPE_NESTED) {
-            $sortOrderConfig['nested_path']   = $sortOrder->getNestedPath();
-            $sortOrderConfig['mode']          = $sortOrder->getScoreMode();
+            $sortOrderConfig['nested']['path'] = $sortOrder->getNestedPath();
+            $sortOrderConfig['mode']           = $sortOrder->getScoreMode();
 
             if ($sortOrder->getNestedFilter()) {
-                $sortOrderConfig['nested_filter'] = $this->queryBuilder->buildQuery($sortOrder->getNestedFilter());
+                $sortOrderConfig['nested']['filter'] = $this->queryBuilder->buildQuery($sortOrder->getNestedFilter());
             }
         }
 

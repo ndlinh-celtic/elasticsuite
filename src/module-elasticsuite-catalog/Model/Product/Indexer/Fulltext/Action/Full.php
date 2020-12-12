@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -17,7 +17,7 @@ namespace Smile\ElasticsuiteCatalog\Model\Product\Indexer\Fulltext\Action;
 use Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Indexer\Fulltext\Action\Full as ResourceModel;
 
 /**
- * ElasticSearch product full indexer.
+ * Elasticsearch product full indexer.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
@@ -51,14 +51,21 @@ class Full
      */
     public function rebuildStoreIndex($storeId, $productIds = null)
     {
-        $lastProductId = 0;
+        $productId = 0;
+
+        // Magento is only sending children ids here. Ensure to reindex also the parents product ids, if any.
+        if (!empty($productIds)) {
+            $productIds = array_unique(array_merge($productIds, $this->resourceModel->getRelationsByChild($productIds)));
+        }
 
         do {
-            $products = $this->getSearchableProducts($storeId, $productIds, $lastProductId);
+            $products = $this->getSearchableProducts($storeId, $productIds, $productId);
 
             foreach ($products as $productData) {
-                $lastProductId = (int) $productData['entity_id'];
-                yield $lastProductId => $productData;
+                $productId = (int) $productData['entity_id'];
+                $productData['has_options']      = (bool) $productData['has_options'];
+                $productData['required_options'] = (bool) $productData['required_options'];
+                yield $productId => $productData;
             }
         } while (!empty($products));
     }
@@ -73,7 +80,7 @@ class Full
      *
      * @return array
      */
-    private function getSearchableProducts($storeId, $productIds = null, $fromId = 0, $limit = 100)
+    private function getSearchableProducts($storeId, $productIds = null, $fromId = 0, $limit = 10000)
     {
         return $this->resourceModel->getSearchableProducts($storeId, $productIds, $fromId, $limit);
     }

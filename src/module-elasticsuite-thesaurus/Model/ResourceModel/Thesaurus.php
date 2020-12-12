@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteThesaurus
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteThesaurus\Model\ResourceModel;
@@ -123,8 +124,7 @@ class Thesaurus extends \Magento\Framework\Model\ResourceModel\Db\AbstractDb
     {
         if ($object->getId()) {
             $stores = $this->getStoreIdsFromThesaurusId($object->getId());
-            $object->setData('store_id', $stores);
-            $object->setData('stores', $stores);
+            $object->setStoreIds($stores);
         }
 
         return parent::_afterLoad($object);
@@ -149,15 +149,14 @@ class Thesaurus extends \Magento\Framework\Model\ResourceModel\Db\AbstractDb
             $storeLinks = [];
             $deleteCondition = [ThesaurusInterface::THESAURUS_ID . " = ?" => $object->getThesaurusId()];
 
-            foreach ($storeIds as $key => $storeId) {
+            foreach ($storeIds as $storeId) {
                 $storeLinks[] = [
                     ThesaurusInterface::THESAURUS_ID  => (int) $object->getThesaurusId(),
                     ThesaurusInterface::STORE_ID      => (int) $storeId,
                 ];
-                $storeIds[$key] = (int) $storeId;
             }
 
-            $deleteCondition[ThesaurusInterface::STORE_ID . " NOT IN (?)"] = array_keys($storeIds);
+            $deleteCondition[ThesaurusInterface::STORE_ID . " NOT IN (?)"] = $storeIds;
 
             $this->getConnection()->delete($this->getTable(ThesaurusInterface::STORE_TABLE_NAME), $deleteCondition);
             $this->getConnection()->insertOnDuplicate(
@@ -186,6 +185,10 @@ class Thesaurus extends \Magento\Framework\Model\ResourceModel\Db\AbstractDb
 
             $termId = 0;
             foreach ($termRelations as $termData) {
+                if (empty($termData['values'])) {
+                    continue;
+                }
+
                 $termId++;
 
                 if ($object->getType() === ThesaurusInterface::TYPE_EXPANSION) {

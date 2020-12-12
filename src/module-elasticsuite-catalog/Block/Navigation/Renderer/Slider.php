@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Block\Navigation\Renderer;
@@ -19,6 +19,7 @@ use Magento\Framework\View\Element\Template;
 use Magento\Framework\View\Element\Template\Context;
 use Magento\Framework\Locale\FormatInterface;
 use Magento\Framework\Json\EncoderInterface;
+use \Magento\Catalog\Helper\Data as CatalogHelper;
 
 /**
  * This block handle standard decimal slider rendering.
@@ -49,18 +50,20 @@ class Slider extends AbstractRenderer
 
     /**
      *
-     * @param Context          $context      Template context.
-     * @param EncoderInterface $jsonEncoder  JSON Encoder.
-     * @param FormatInterface  $localeFormat Price format config.
-     * @param array            $data         Custom data.
+     * @param Context          $context       Template context.
+     * @param CatalogHelper    $catalogHelper Catalog helper.
+     * @param EncoderInterface $jsonEncoder   JSON Encoder.
+     * @param FormatInterface  $localeFormat  Price format config.
+     * @param array            $data          Custom data.
      */
     public function __construct(
         Context $context,
+        CatalogHelper $catalogHelper,
         EncoderInterface $jsonEncoder,
         FormatInterface $localeFormat,
         array $data = []
     ) {
-        parent::__construct($context, $data);
+        parent::__construct($context, $catalogHelper, $data);
 
         $this->jsonEncoder  = $jsonEncoder;
         $this->localeFormat = $localeFormat;
@@ -132,8 +135,9 @@ class Slider extends AbstractRenderer
             'intervals'        => $this->getIntervals(),
             'urlTemplate'      => $this->getUrlTemplate(),
             'messageTemplates' => [
-                'displayCount' => __('<%- count %> products'),
-                'displayEmpty' => __('No products in the selected range.'),
+                'displayOne'    => __('1 product'),
+                'displayCount'  => __('<%- count %> products'),
+                'displayEmpty'  => __('No products in the selected range.'),
             ],
         ];
 
@@ -210,7 +214,7 @@ class Slider extends AbstractRenderer
         $filter = $this->getFilter();
         $item   = current($this->getFilter()->getItems());
 
-        $regexp      = "/({$filter->getRequestVar()})=([0-9]+)/";
+        $regexp      = "/({$filter->getRequestVar()})=(-?[0-9]+)/";
         $replacement = '${1}=<%- from %>-<%- to %>';
 
         return preg_replace($regexp, $replacement, $item->getUrl());

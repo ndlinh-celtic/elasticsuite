@@ -1,26 +1,25 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteThesaurus
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteThesaurus\Model\ResourceModel\Indexer;
 
-use Smile\ElasticsuiteThesaurus\Model\Index as ThesaurusIndex;
 use Smile\ElasticsuiteThesaurus\Api\Data\ThesaurusInterface;
 
 /**
  * Thesaurus indexer resource model.
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteThesaurus
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -61,7 +60,7 @@ class Thesaurus extends \Smile\ElasticsuiteThesaurus\Model\ResourceModel\Thesaur
             []
         );
 
-        $select->columns(['terms' => new \Zend_Db_Expr('CONCAT(expanded_terms.term, " => " ,GROUP_CONCAT(terms.term))')]);
+        $select->columns(['terms' => new \Zend_Db_Expr('CONCAT(expanded_terms.term,"=>",GROUP_CONCAT(terms.term))')]);
 
         return $connection->fetchCol($select);
     }
@@ -80,8 +79,16 @@ class Thesaurus extends \Smile\ElasticsuiteThesaurus\Model\ResourceModel\Thesaur
         $select     = $connection->select();
 
         $select->from(['thesaurus' => $this->getMainTable()], [])
-            ->join(['terms' => $this->getTable(ThesaurusInterface::EXPANSION_TABLE_NAME)], 'thesaurus.thesaurus_id = terms.thesaurus_id', [])
-            ->join(['store' => $this->getTable(ThesaurusInterface::STORE_TABLE_NAME)], 'store.thesaurus_id = thesaurus.thesaurus_id', [])
+            ->join(
+                ['terms' => $this->getTable(ThesaurusInterface::EXPANSION_TABLE_NAME)],
+                'thesaurus.thesaurus_id = terms.thesaurus_id',
+                []
+            )
+            ->join(
+                ['store' => $this->getTable(ThesaurusInterface::STORE_TABLE_NAME)],
+                'store.thesaurus_id = thesaurus.thesaurus_id',
+                []
+            )
             ->group(['thesaurus.thesaurus_id', 'terms.term_id'])
             ->where("thesaurus.type = ?", $type)
             ->where('thesaurus.is_active = 1')

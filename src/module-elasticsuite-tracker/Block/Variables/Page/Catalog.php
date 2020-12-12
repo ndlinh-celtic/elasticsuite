@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Searchandising Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteTracker
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteTracker\Block\Variables\Page;
@@ -132,7 +132,7 @@ class Catalog extends \Smile\ElasticsuiteTracker\Block\Variables\Page\AbstractBl
                 if (is_array($filterValue)) {
                     $filterValue = implode('|', $filterValue);
                 }
-                $variables['product_list.filters.' . $identifier] = $filterValue;
+                $variables['product_list.filters.' . $identifier] = html_entity_decode($filterValue);
             }
         }
 

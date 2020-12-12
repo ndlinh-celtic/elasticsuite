@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -31,7 +31,13 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
     /**
      * @var array
      */
-    private $forbidenChildrenAttributeCode = ['visibility', 'status', 'price', 'tax_class_id'];
+    private $forbidenChildrenAttributeCode = [
+        'visibility',
+        'status',
+        'price',
+        'tax_class_id',
+        'name',
+    ];
 
     /**
      * {@inheritdoc}
@@ -41,11 +47,18 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
         $productIds   = array_keys($indexData);
         $indexData    = $this->addAttributeData($storeId, $productIds, $indexData);
 
-        $relationsByChildId = $this->resourceModel->loadChildrens($productIds);
+        $relationsByChildId = $this->resourceModel->loadChildrens($productIds, $storeId);
 
         if (!empty($relationsByChildId)) {
-            $allChildrenIds = array_keys($relationsByChildId);
-            $childrenIndexData = $this->addAttributeData($storeId, $allChildrenIds);
+            $allChildrenIds      = array_keys($relationsByChildId);
+            $childrenIndexData   = $this->addAttributeData($storeId, $allChildrenIds);
+
+            foreach ($childrenIndexData as $childrenId => $childrenData) {
+                $enabled = isset($childrenData['status']) && current($childrenData['status']) == 1;
+                if ($enabled === false) {
+                    unset($childrenIndexData[$childrenId]);
+                }
+            }
 
             foreach ($relationsByChildId as $childId => $relations) {
                 foreach ($relations as $relation) {
@@ -54,12 +67,13 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
                         $indexData[$parentId]['children_ids'][] = $childId;
                         $this->addRelationData($indexData[$parentId], $childrenIndexData[$childId], $relation);
                         $this->addChildData($indexData[$parentId], $childrenIndexData[$childId]);
+                        $this->addChildSku($indexData[$parentId], $relation);
                     }
                 }
             }
         }
 
-        return $indexData;
+        return $this->filterCompositeProducts($indexData);
     }
 
     /**
@@ -84,6 +98,8 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
                 }
 
                 $indexData[$productId] += $indexValues;
+
+                $this->addIndexedAttribute($indexData[$productId], $attribute);
             }
         }
 
@@ -114,7 +130,7 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
                 $parentData[$attributeCode] = [];
             }
 
-            $parentData[$attributeCode] = array_unique(array_merge($parentData[$attributeCode], $value));
+            $parentData[$attributeCode] = array_values(array_unique(array_merge($parentData[$attributeCode], $value)));
         }
     }
 
@@ -130,10 +146,9 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
     private function addRelationData(&$parentData, $childAttributes, $relation)
     {
         $childAttributeCodes  = array_keys($childAttributes);
-        $parentAttributeCodes = array_keys($parentData);
 
         if (!isset($parentData['children_attributes'])) {
-            $parentData['children_attributes'] = [];
+            $parentData['children_attributes'] = ['indexed_attributes'];
         }
 
         $childrenAttributes = array_merge(
@@ -142,31 +157,81 @@ class AttributeData extends AbstractAttributeData implements DatasourceInterface
         );
 
         if (isset($relation['configurable_attributes']) && !empty($relation['configurable_attributes'])) {
-            $addedChildrenAttributes = array_diff(
-                $childAttributeCodes,
-                $this->forbidenChildrenAttributeCode,
-                $parentAttributeCodes
-            );
-            $childrenAttributes = array_merge($addedChildrenAttributes, $parentData['children_attributes']);
-
-            if (!isset($parentData['configurable_attributes'])) {
-                $parentData['configurable_attributes'] = [];
-            }
-
-            $configurableAttributesCodes = array_map(
-                function ($attributeId) {
-                    if (isset($this->attributesById[(int) $attributeId])) {
-                        return $this->attributesById[(int) $attributeId]->getAttributeCode();
+            $attributesCodes = array_map(
+                function (int $attributeId) {
+                    if (isset($this->attributesById[$attributeId])) {
+                        return $this->attributesById[$attributeId]->getAttributeCode();
                     }
                 },
                 $relation['configurable_attributes']
             );
 
-            $parentData['configurable_attributes'] = array_unique(
-                array_merge($configurableAttributesCodes, $parentData['configurable_attributes'])
+            $parentData['configurable_attributes'] = array_values(
+                array_unique(
+                    array_merge($attributesCodes, $parentData['configurable_attributes'] ?? [])
+                )
             );
         }
 
-        $parentData['children_attributes'] = array_unique($childrenAttributes);
+        $parentData['children_attributes'] = array_values(array_unique($childrenAttributes));
+    }
+
+    /**
+     * Filter out composite product when no enabled children are attached.
+     *
+     * @param array $indexData Indexed data.
+     *
+     * @return array
+     */
+    private function filterCompositeProducts($indexData)
+    {
+        $compositeProductTypes = $this->resourceModel->getCompositeTypes();
+
+        foreach ($indexData as $productId => $productData) {
+            $isComposite = in_array($productData['type_id'], $compositeProductTypes);
+            $hasChildren = isset($productData['children_ids']) && !empty($productData['children_ids']);
+            if ($isComposite && !$hasChildren) {
+                unset($indexData[$productId]);
+            }
+        }
+
+        return $indexData;
+    }
+
+    /**
+     * Append SKU of children product to the parent product index data.
+     *
+     * @param array $parentData Parent product data.
+     * @param array $relation   Relation data between the child and the parent.
+     */
+    private function addChildSku(&$parentData, $relation)
+    {
+        if (isset($parentData['sku']) && !is_array($parentData['sku'])) {
+            $parentData['sku'] = [$parentData['sku']];
+        }
+
+        $parentData['sku'][] = $relation['sku'];
+        $parentData['sku'] = array_unique($parentData['sku']);
+    }
+
+    /**
+     * Append an indexed attributes to indexed data of a given product.
+     *
+     * @param array                                                  $productIndexData Product Index data
+     * @param \Magento\Eav\Model\Entity\Attribute\AttributeInterface $attribute        The attribute
+     */
+    private function addIndexedAttribute(&$productIndexData, $attribute)
+    {
+        if (!isset($productIndexData['indexed_attributes'])) {
+            $productIndexData['indexed_attributes'] = [];
+        }
+
+        // Data can be missing for this attribute (Eg : due to null value being escaped,
+        // or this attribute is already included in the array).
+        if (isset($productIndexData[$attribute->getAttributeCode()])
+            && !in_array($attribute->getAttributeCode(), $productIndexData['indexed_attributes'])
+        ) {
+            $productIndexData['indexed_attributes'][] = $attribute->getAttributeCode();
+        }
     }
 }

@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Category\Indexer;
@@ -30,9 +31,6 @@ class Fulltext implements \Magento\Framework\Indexer\ActionInterface, \Magento\F
      * @var string
      */
     const INDEXER_ID = 'elasticsuite_categories_fulltext';
-
-    /** @var array index structure */
-    protected $data;
 
     /**
      * @var IndexerInterface
@@ -59,20 +57,17 @@ class Fulltext implements \Magento\Framework\Indexer\ActionInterface, \Magento\F
      * @param IndexerInterface      $indexerHandler   The index handler
      * @param StoreManagerInterface $storeManager     The Store Manager
      * @param DimensionFactory      $dimensionFactory The dimension factory
-     * @param array                 $data             The data
      */
     public function __construct(
         Full $fullAction,
         IndexerInterface $indexerHandler,
         StoreManagerInterface $storeManager,
-        DimensionFactory $dimensionFactory,
-        array $data
+        DimensionFactory $dimensionFactory
     ) {
         $this->fullAction = $fullAction;
         $this->indexerHandler = $indexerHandler;
         $this->storeManager = $storeManager;
         $this->dimensionFactory = $dimensionFactory;
-        $this->data = $data;
     }
 
     /**

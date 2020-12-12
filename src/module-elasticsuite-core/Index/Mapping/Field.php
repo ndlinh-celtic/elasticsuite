@@ -1,30 +1,38 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Index\Mapping;
 
 use Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface;
+use Smile\ElasticsuiteCore\Search\Request\SortOrderInterface;
 
 /**
  * Default implementation for ES mapping field (Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface).
  *
- * @category Smile_Elasticsuite
+ * @SuppressWarnings(ExcessiveClassComplexity)
+ *
+ * @category Smile
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
 class Field implements FieldInterface
 {
+    /**
+     * @var int
+     */
+    private const IGNORE_ABOVE_COUNT = 256;
+
     /**
      * @var string
      */
@@ -58,8 +66,8 @@ class Field implements FieldInterface
         'is_filterable'           => true,
         'is_used_for_sort_by'     => false,
         'is_used_in_spellcheck'   => false,
-        'is_used_in_autocomplete' => false,
         'search_weight'           => 1,
+        'default_search_analyzer' => self::ANALYZER_STANDARD,
     ];
 
     /**
@@ -71,18 +79,22 @@ class Field implements FieldInterface
      * @param array       $fieldConfig Field configuration (see self::$config declaration for
      *                                 available values and default values).
      */
-    public function __construct($name, $type = 'string', $nestedPath = null, $fieldConfig = [])
+    public function __construct($name, $type = self::FIELD_TYPE_KEYWORD, $nestedPath = null, $fieldConfig = [])
     {
         $this->name       = (string) $name;
         $this->type       = (string) $type;
         $this->config     = $fieldConfig + $this->config;
         $this->nestedPath = $nestedPath;
+
+        if ($nestedPath !== null && strpos($name, $nestedPath . '.') !== 0) {
+            throw new \InvalidArgumentException('Invalid nested path or field name');
+        }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getName()
+    public function getName(): string
     {
         return $this->name;
     }
@@ -90,7 +102,7 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function getType()
+    public function getType(): string
     {
         return $this->type;
     }
@@ -98,7 +110,7 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function isSearchable()
+    public function isSearchable(): bool
     {
         return (bool) $this->config['is_searchable'];
     }
@@ -106,7 +118,7 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function isFilterable()
+    public function isFilterable(): bool
     {
         return (bool) $this->config['is_filterable'];
     }
@@ -114,7 +126,7 @@ class Field implements FieldInterface
     /**
      * {@inheritDoc}
      */
-    public function isUsedForSortBy()
+    public function isUsedForSortBy(): bool
     {
         return (bool) $this->config['is_used_for_sort_by'];
     }
@@ -122,23 +134,15 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function isUsedInSpellcheck()
+    public function isUsedInSpellcheck(): bool
     {
-        return (bool) $this->config['is_used_in_spellcheck'];
+        return (bool) $this->config['is_used_in_spellcheck'] && (bool) $this->config['is_searchable'];
     }
 
     /**
      * {@inheritdoc}
      */
-    public function isUsedInAutocomplete()
-    {
-        return (bool) $this->config['is_used_in_autocomplete'];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getSearchWeight()
+    public function getSearchWeight(): int
     {
         return (int) $this->config['search_weight'];
     }
@@ -146,7 +150,7 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function isNested()
+    public function isNested(): bool
     {
         return is_string($this->nestedPath) && !empty($this->nestedPath);
     }
@@ -154,7 +158,7 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function getNestedPath()
+    public function getNestedPath(): ?string
     {
         return $this->nestedPath;
     }
@@ -177,11 +181,11 @@ class Field implements FieldInterface
     /**
      * {@inheritdoc}
      */
-    public function getMappingPropertyConfig()
+    public function getMappingPropertyConfig(): array
     {
         $property = $this->getPropertyConfig();
 
-        if ($this->getType() == self::FIELD_TYPE_STRING) {
+        if ($this->getType() === self::FIELD_TYPE_TEXT) {
             $analyzers = $this->getFieldAnalyzers();
             $property = $this->getPropertyConfig(current($analyzers));
 
@@ -201,15 +205,14 @@ class Field implements FieldInterface
         $fieldName    = $this->getName();
         $propertyName = $fieldName;
         $property     = $this->getMappingPropertyConfig();
+        $isDefaultAnalyzer = $analyzer === $this->getDefaultSearchAnalyzer();
 
-        if ($property['type'] == self::FIELD_TYPE_MULTI) {
-            $isDefaultAnalyzer = $analyzer == self::ANALYZER_STANDARD;
-            $subFieldName = $isDefaultAnalyzer ? $fieldName : $analyzer;
+        if (!$isDefaultAnalyzer && isset($property['fields'])) {
             $propertyName = null;
 
-            if (isset($property['fields'][$subFieldName])) {
-                $property     = $property['fields'][$subFieldName];
-                $propertyName = $isDefaultAnalyzer ? $fieldName : sprintf("%s.%s", $fieldName, $subFieldName);
+            if (isset($property['fields'][$analyzer])) {
+                $property     = $property['fields'][$analyzer];
+                $propertyName = $isDefaultAnalyzer ? $fieldName : sprintf('%s.%s', $fieldName, $analyzer);
             }
         }
 
@@ -221,6 +224,50 @@ class Field implements FieldInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function getDefaultSearchAnalyzer()
+    {
+        return $this->config['default_search_analyzer'];
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function mergeConfig(array $config = [])
+    {
+        $config = array_merge($this->config, $config);
+
+        return new static($this->name, $this->type, $this->nestedPath, $config);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getSortMissing($direction = SortOrderInterface::SORT_ASC)
+    {
+        // @codingStandardsIgnoreStart
+        $missing = $direction === SortOrderInterface::SORT_ASC ? SortOrderInterface::MISSING_LAST : SortOrderInterface::MISSING_FIRST;
+        // @codingStandardsIgnoreEnd
+
+        if ($direction === SortOrderInterface::SORT_ASC && isset($this->config['sort_order_asc_missing'])) {
+            $missing = $this->config['sort_order_asc_missing'];
+        } elseif ($direction === SortOrderInterface::SORT_DESC && isset($this->config['sort_order_desc_missing'])) {
+            $missing = $this->config['sort_order_desc_missing'];
+        }
+
+        return $missing;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getConfig(): array
+    {
+        return $this->config ?? [];
+    }
+
+    /**
      * Check if an ES property as the right analyzer.
      *
      * @param array  $property         ES Property.
@@ -228,16 +275,16 @@ class Field implements FieldInterface
      *
      * @return boolean
      */
-    private function checkAnalyzer($property, $expectedAnalyzer)
+    private function checkAnalyzer($property, $expectedAnalyzer): bool
     {
         $isAnalyzerCorrect = true;
 
-        if ($property['type'] == self::FIELD_TYPE_STRING) {
-            $isAnalyzed        = $expectedAnalyzer !== self::ANALYZER_UNTOUCHED;
+        if ($property['type'] === self::FIELD_TYPE_TEXT || $property['type'] === self::FIELD_TYPE_KEYWORD) {
+            $isAnalyzed = $expectedAnalyzer !== self::ANALYZER_UNTOUCHED;
 
-            if ($isAnalyzed && (!isset($property['analyzer']) || $property['analyzer'] != $expectedAnalyzer)) {
+            if ($isAnalyzed && (!isset($property['analyzer']) || $property['analyzer'] !== $expectedAnalyzer)) {
                 $isAnalyzerCorrect = false;
-            } elseif (!$isAnalyzed && (!isset($property['index']) || $property['index'] != 'not_analyzed')) {
+            } elseif (!$isAnalyzed && $property['type'] !== self::FIELD_TYPE_KEYWORD) {
                 $isAnalyzerCorrect = false;
             }
         }
@@ -253,26 +300,21 @@ class Field implements FieldInterface
      *
      * @param array $analyzers List of analyzers used as subfields.
      *
+     * @SuppressWarnings(PHPMD.ElseExpression)
+     *
      * @return array
      */
-    private function getMultiFieldMappingPropertyConfig($analyzers)
+    private function getMultiFieldMappingPropertyConfig($analyzers): array
     {
         // Setting the field type to "multi_field".
-        $property = ['type' => self::FIELD_TYPE_MULTI];
+        $property = [];
 
         foreach ($analyzers as $analyzer) {
-            // Using the analyzer name as subfield name by default.
-            $subFieldName = $analyzer;
-
-            if ($analyzer == self::ANALYZER_STANDARD && $this->isNested()) {
-                // Using the field suffix as default subfield name for nested fields.
-                $subFieldName = $this->getNestedFieldName();
-            } elseif ($analyzer == self::ANALYZER_STANDARD) {
-                // Using the field name as default subfield name for normal fields.
-                $subFieldName = $this->getName();
+            if ($analyzer === $this->getDefaultSearchAnalyzer()) {
+                $property = array_merge($property, $this->getPropertyConfig($analyzer));
+            } else {
+                $property['fields'][$analyzer] = $this->getPropertyConfig($analyzer);
             }
-
-            $property['fields'][$subFieldName] = $this->getPropertyConfig($analyzer);
         }
 
         return $property;
@@ -283,25 +325,20 @@ class Field implements FieldInterface
      *
      * @return array
      */
-    private function getFieldAnalyzers()
+    private function getFieldAnalyzers(): array
     {
         $analyzers = [];
 
-        if ($this->isSearchable()) {
+        if ($this->isSearchable() || $this->isUsedForSortBy()) {
             // Default search analyzer.
-            $analyzers = [self::ANALYZER_STANDARD, self::ANALYZER_WHITESPACE, self::ANALYZER_SHINGLE];
-
-            if ($this->isUsedInAutocomplete()) {
-                // Append edge_ngram analyzer when the field is used in autocomplete.
-                $analyzers[] = self::ANALYZER_EDGE_NGRAM;
-            }
-
-            if ($this->isUsedInSpellcheck()) {
-                $analyzers[] = self::ANALYZER_PHONETIC;
-            }
+            $analyzers = [$this->getDefaultSearchAnalyzer()];
+        }
+        if ($this->isSearchable() && $this->getSearchWeight() > 1) {
+            $analyzers[] = self::ANALYZER_WHITESPACE;
+            $analyzers[] = self::ANALYZER_SHINGLE;
         }
 
-        if ($this->isFilterable() || empty($analyzers)) {
+        if (empty($analyzers) || $this->isFilterable()) {
             // For filterable fields or fields without analyzer : append the untouched analyzer.
             $analyzers[] = self::ANALYZER_UNTOUCHED;
         }
@@ -321,17 +358,26 @@ class Field implements FieldInterface
      *
      * @return array
      */
-    private function getPropertyConfig($analyzer = null)
+    private function getPropertyConfig($analyzer = self::ANALYZER_UNTOUCHED): array
     {
-        $fieldMapping = ['type' => $this->getType(), 'fielddata' => ['format' => 'doc_values']];
+        $fieldMapping = ['type' => $this->getType()];
 
-        if ($this->getType() == self::FIELD_TYPE_STRING && $analyzer == self::ANALYZER_UNTOUCHED) {
-            $fieldMapping['index'] = 'not_analyzed';
-        } elseif ($this->getType() == self::FIELD_TYPE_STRING) {
-            $fieldMapping['fielddata'] = ['format' => 'lazy'];
-            $fieldMapping['analyzer']  = $analyzer !== null ? $analyzer : self::ANALYZER_UNTOUCHED;
-        } elseif ($this->getType() == self::FIELD_TYPE_DATE) {
-            $fieldMapping['format'] = implode('||', $this->dateFormats);
+        switch ($this->getType()) {
+            case self::FIELD_TYPE_TEXT:
+                if ($analyzer === self::ANALYZER_UNTOUCHED) {
+                    $fieldMapping['type'] = self::FIELD_TYPE_KEYWORD;
+                    $fieldMapping['ignore_above'] = self::IGNORE_ABOVE_COUNT;
+                }
+                if ($analyzer !== self::ANALYZER_UNTOUCHED) {
+                    $fieldMapping['analyzer'] = $analyzer;
+                    if ($analyzer === self::ANALYZER_SORTABLE) {
+                        $fieldMapping['fielddata'] = true;
+                    }
+                }
+                break;
+            case self::FIELD_TYPE_DATE:
+                $fieldMapping['format'] = implode('||', $this->dateFormats);
+                break;
         }
 
         return $fieldMapping;

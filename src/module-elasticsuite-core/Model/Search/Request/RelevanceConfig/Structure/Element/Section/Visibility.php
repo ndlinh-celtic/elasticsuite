@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\Structure\Element\Section;
@@ -19,8 +20,7 @@ namespace Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\Structure\
  * @package  Smile\ElasticsuiteCore
  * @author   Romain Ruaud <romain.ruaud@smile.fr>
  */
-class Visibility extends
-\Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\Structure\Element\Visibility
+class Visibility extends \Smile\ElasticsuiteCore\Model\Search\Request\RelevanceConfig\Structure\Element\Visibility
 {
     /**
      * Check a configuration element visibility

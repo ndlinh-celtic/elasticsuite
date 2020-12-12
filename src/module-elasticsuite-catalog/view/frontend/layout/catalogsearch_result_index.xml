@@ -3,14 +3,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
  -->
@@ -23,6 +22,15 @@
                    as="renderer" 
                    template="Smile_ElasticsuiteCatalog::layer/filter/default.phtml">
                    
+                   <block class="Smile\ElasticsuiteCatalog\Block\Navigation\Renderer\Attribute"
+                           name="catalogsearch.navigation.renderer.attribute"
+                           template="Smile_ElasticsuiteCatalog::layer/filter/attribute.phtml"
+                           after="-" />
+                           
+                   <block class="Smile\ElasticsuiteCatalog\Block\Navigation\Renderer\Category"
+                           name="catalogsearch.navigation.renderer.category"
+                           template="Smile_ElasticsuiteCatalog::layer/filter/default.phtml" />
+                   
                     <block class="Smile\ElasticsuiteCatalog\Block\Navigation\Renderer\Slider"
                            name="catalogsearch.navigation.renderer.slider"
                            template="Smile_ElasticsuiteCatalog::layer/filter/slider.phtml" />
@@ -32,5 +40,12 @@
                           template="Smile_ElasticsuiteCatalog::layer/filter/slider.phtml" />
             </block>
         </referenceBlock>
+
+        <referenceContainer name="content">
+            <block class = "Smile\ElasticsuiteCatalog\Block\CatalogSearch\Result\Cache"
+                   name  = "smile.elasticsuite.catalogsearch.result.cache"
+                   as    = "smile.elasticsuite.catalogsearch.result.cache"
+            />
+        </referenceContainer>
     </body>
 </page>

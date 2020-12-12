@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -97,8 +97,13 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
 
         $documentSource = $category->getDocumentSource();
 
+        $title = $documentSource['name'] ?? '';
+        if (is_array($title)) {
+            $title = current($title);
+        }
+
         $categoryData = [
-            'title'      => $documentSource['name'],
+            'title'      => html_entity_decode($title),
             'url'        => $this->getCategoryUrl($category),
             'breadcrumb' => $this->getCategoryBreadcrumb($category),
         ];
@@ -123,9 +128,7 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
         if ($documentSource && isset($documentSource['url_path'])) {
             $urlPath = is_array($documentSource['url_path']) ? current($documentSource['url_path']) : $documentSource['url_path'];
 
-            $url = trim($this->urlBuilder->getUrl($urlPath), '/') . $this->categoryUrlSuffix;
-
-            return $url;
+            return trim($this->urlBuilder->getDirectUrl($urlPath), '/') . $this->categoryUrlSuffix;
         }
 
         return $category->getUrl();
@@ -151,7 +154,7 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
 
         $breadcrumb = [];
         foreach ($rawPath as $categoryId) {
-            $breadcrumb[] = $this->getCategoryNameById($categoryId, $category->getStoreId());
+            $breadcrumb[] = html_entity_decode($this->getCategoryNameById($categoryId, $category->getStoreId()));
         }
 
         return $breadcrumb;

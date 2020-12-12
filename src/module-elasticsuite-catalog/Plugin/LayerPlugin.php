@@ -1,27 +1,26 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Plugin;
 
-use Magento\CatalogInventory\Model\Plugin\Layer;
-
 /**
- * Replace is in stock native filter on layer.
+ * Prepare collection sort orders.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
-class LayerPlugin extends \Magento\CatalogInventory\Model\Plugin\Layer
+class LayerPlugin
 {
     /**
      * @var \Magento\Search\Model\QueryFactory
@@ -29,19 +28,32 @@ class LayerPlugin extends \Magento\CatalogInventory\Model\Plugin\Layer
     protected $queryFactory;
 
     /**
+     * Catalog config
+     *
+     * @var \Magento\Catalog\Model\Config
+     */
+    private $catalogConfig;
+
+    /**
+     * @var \Smile\ElasticsuiteCore\Helper\Mapping
+     */
+    private $mappingHelper;
+
+    /**
      * Constructor.
      *
-     * @param \Magento\CatalogInventory\Helper\Stock             $stockHelper  Stock helper.
-     * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig  Configuration.
-     * @param \Magento\Search\Model\QueryFactory                 $queryFactory Search query factory.
+     * @param \Magento\Search\Model\QueryFactory     $queryFactory  Search query factory.
+     * @param \Magento\Catalog\Model\Config          $catalogConfig Catalog Configuration.
+     * @param \Smile\ElasticsuiteCore\Helper\Mapping $mappingHelper Mapping Helper.
      */
     public function __construct(
-        \Magento\CatalogInventory\Helper\Stock $stockHelper,
-        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
-        \Magento\Search\Model\QueryFactory $queryFactory
+        \Magento\Search\Model\QueryFactory $queryFactory,
+        \Magento\Catalog\Model\Config $catalogConfig,
+        \Smile\ElasticsuiteCore\Helper\Mapping $mappingHelper
     ) {
-        parent::__construct($stockHelper, $scopeConfig);
-        $this->queryFactory = $queryFactory;
+        $this->queryFactory  = $queryFactory;
+        $this->catalogConfig = $catalogConfig;
+        $this->mappingHelper = $mappingHelper;
     }
 
 
@@ -52,10 +64,6 @@ class LayerPlugin extends \Magento\CatalogInventory\Model\Plugin\Layer
         \Magento\Catalog\Model\Layer $layer,
         \Magento\Catalog\Model\ResourceModel\Collection\AbstractCollection $collection
     ) {
-        if ($this->_isEnabledShowOutOfStock() === false) {
-            $collection->addIsInStockFilter();
-        }
-
         $this->setSortParams($layer, $collection);
     }
 
@@ -75,7 +83,18 @@ class LayerPlugin extends \Magento\CatalogInventory\Model\Plugin\Layer
 
         if (!$searchQuery->getQueryText() && $layer->getCurrentCategory()) {
             $categoryId = $layer->getCurrentCategory()->getId();
-            $collection->addSortFilterParameters('position', 'category.position', 'category', ['category.category_id' => $categoryId]);
+            $sortFilter = ['category.category_id' => $categoryId];
+            $collection->addSortFilterParameters('position', 'category.position', 'category', $sortFilter);
+        } elseif ($searchQuery->getId()) {
+            $sortFilter = ['search_query.query_id' => $searchQuery->getId()];
+            $collection->addSortFilterParameters('relevance', 'search_query.position', 'search_query', $sortFilter);
+        }
+
+        foreach ($this->catalogConfig->getAttributesUsedForSortBy() as $attributeCode => $attribute) {
+            if ($attribute->usesSource()) {
+                $sortField = $this->mappingHelper->getOptionTextFieldName($attributeCode);
+                $collection->addSortFilterParameters($attributeCode, $sortField);
+            }
         }
 
         return $this;

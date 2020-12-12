@@ -1,14 +1,14 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -19,7 +19,7 @@ use Smile\ElasticsuiteCore\Api\Index\Mapping\DynamicFieldProviderInterface;
 /**
  * Convert indices configuration XML file.
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -30,7 +30,6 @@ class Converter implements \Magento\Framework\Config\ConverterInterface
     const TYPE_NODE_TYPE          = 'type';
     const MAPPING_NODE_TYPE       = 'mapping';
     const MAPPING_FIELD_NODE_TYPE = 'field';
-    const DATASOURCES_PATH        = 'datasources/datasource';
 
     /**
      * Tag names underscore transformation cache
@@ -97,18 +96,10 @@ class Converter implements \Magento\Framework\Config\ConverterInterface
     {
         $staticFields  = $this->parseMappingFields($xpath, $typeRootNode);
         $idFieldName   = $typeRootNode->getAttribute('idFieldName');
-        $datasources   = $this->parseDatasources($xpath, $typeRootNode);
 
-        $dynamicFieldProviders = array_filter(
-            $datasources,
-            function ($datasource) {
-                return $datasource instanceof DynamicFieldProviderInterface;
-            }
-        );
+        $mappingParams = ['staticFields' => $staticFields];
 
-        $mappingParams = ['staticFields' => $staticFields, 'dynamicFieldProviders' => $dynamicFieldProviders];
-
-        return ['mapping' => $mappingParams, 'datasources' => $datasources, 'idFieldName' => $idFieldName];
+        return ['mapping' => $mappingParams, 'idFieldName' => $idFieldName];
     }
 
     /**
@@ -129,25 +120,6 @@ class Converter implements \Magento\Framework\Config\ConverterInterface
         }
 
         return $fields;
-    }
-
-    /**
-     * Parse datasources from type node configuration.
-     *
-     * @param \DOMXPath $xpath        XPath access to the document parsed.
-     * @param \DOMNode  $typeRootNode Type node to be parsed.
-     *
-     * @return array
-     */
-    private function parseDatasources(\DOMXPath $xpath, \DOMNode $typeRootNode)
-    {
-        $datasources = [];
-
-        foreach ($xpath->query(self::DATASOURCES_PATH, $typeRootNode) as $datasourceNode) {
-            $datasources[$datasourceNode->getAttribute('name')] = $datasourceNode->nodeValue;
-        }
-
-        return $datasources;
     }
 
     /**
@@ -187,14 +159,10 @@ class Converter implements \Magento\Framework\Config\ConverterInterface
      */
     private function underscore($name)
     {
-        if (isset($this->underscoreCache[$name])) {
-            return $this->underscoreCache[$name];
+        if (!isset($this->underscoreCache[$name])) {
+            $this->underscoreCache[$name] = strtolower(preg_replace('/(.)([A-Z])/', "$1_$2", $name));
         }
 
-        $result = strtolower(preg_replace('/(.)([A-Z])/', "$1_$2", $name));
-
-        $this->underscoreCache[$name] = $result;
-
-        return $result;
+        return $this->underscoreCache[$name];
     }
 }

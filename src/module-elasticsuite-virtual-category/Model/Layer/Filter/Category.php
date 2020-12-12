@@ -2,20 +2,17 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteVirtualCategory
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteVirtualCategory\Model\Layer\Filter;
-
-use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
 
 /**
  * Product category filter implementation using virtual categories.
@@ -27,18 +24,27 @@ use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
 class Category extends \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Category
 {
     /**
+     * @var \Smile\ElasticsuiteVirtualCategory\Model\Category\Filter\Provider
+     */
+    private $filterProvider;
+
+    /**
      * Constructor.
      *
      * @SuppressWarnings(PHPMD.BooleanArgumentFlag)
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      *
-     * @param \Magento\Catalog\Model\Layer\Filter\ItemFactory                  $filterItemFactory   Filter item factory.
-     * @param \Magento\Store\Model\StoreManagerInterface                       $storeManager        Store manager.
-     * @param \Magento\Catalog\Model\Layer                                     $layer               Search layer.
-     * @param \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder             $itemDataBuilder     Item data builder.
-     * @param \Magento\Framework\Escaper                                       $escaper             HTML escaper.
-     * @param \Magento\Catalog\Model\Layer\Filter\DataProvider\CategoryFactory $dataProviderFactory Data provider.
-     * @param boolean                                                          $useUrlRewrites      Uses URLs rewrite for rendering.
-     * @param array                                                            $data                Custom data.
+     * @param \Magento\Catalog\Model\Layer\Filter\ItemFactory                   $filterItemFactory   Filter item factory.
+     * @param \Magento\Store\Model\StoreManagerInterface                        $storeManager        Store manager.
+     * @param \Magento\Catalog\Model\Layer                                      $layer               Search layer.
+     * @param \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder              $itemDataBuilder     Item data builder.
+     * @param \Magento\Framework\Escaper                                        $escaper             HTML escaper.
+     * @param \Magento\Catalog\Model\Layer\Filter\DataProvider\CategoryFactory  $dataProviderFactory Data provider.
+     * @param \Magento\Framework\App\Config\ScopeConfigInterface                $scopeConfig         Scope config.
+     * @param \Smile\ElasticsuiteCore\Api\Search\ContextInterface               $context             Search context.
+     * @param \Smile\ElasticsuiteVirtualCategory\Model\Category\Filter\Provider $filterProvider      Category Filter provider.
+     * @param boolean                                                           $useUrlRewrites      Uses URLs rewrite for rendering.
+     * @param array                                                             $data                Custom data.
      */
     public function __construct(
         \Magento\Catalog\Model\Layer\Filter\ItemFactory $filterItemFactory,
@@ -47,6 +53,9 @@ class Category extends \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Category
         \Magento\Catalog\Model\Layer\Filter\Item\DataBuilder $itemDataBuilder,
         \Magento\Framework\Escaper $escaper,
         \Magento\Catalog\Model\Layer\Filter\DataProvider\CategoryFactory $dataProviderFactory,
+        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        \Smile\ElasticsuiteCore\Api\Search\ContextInterface $context,
+        \Smile\ElasticsuiteVirtualCategory\Model\Category\Filter\Provider $filterProvider,
         $useUrlRewrites = false,
         array $data = []
     ) {
@@ -57,27 +66,13 @@ class Category extends \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Category
             $itemDataBuilder,
             $escaper,
             $dataProviderFactory,
+            $scopeConfig,
+            $context,
             $useUrlRewrites,
             $data
         );
-    }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function addFacetToCollection()
-    {
-        $currentCategory = $this->getDataProvider()->getCategory();
-        $facetQueries    = $currentCategory->getVirtualRule()->getSearchQueriesByChildren($currentCategory);
-
-        $facetType   = BucketInterface::TYPE_QUERY_GROUP;
-        $facetField  = $this->getFilterField();
-        $facetConfig = ['name' => $facetField, 'queries' => $facetQueries];
-
-        $productCollection = $this->getLayer()->getProductCollection();
-        $productCollection->addFacet($facetField, $facetType, $facetConfig);
-
-        return $this;
+        $this->filterProvider = $filterProvider;
     }
 
     /**
@@ -93,9 +88,22 @@ class Category extends \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Category
      */
     protected function applyCategoryFilterToCollection(\Magento\Catalog\Api\Data\CategoryInterface $category)
     {
-        $query = $category->getVirtualRule()->getCategorySearchQuery($category);
-        $this->getLayer()->getProductCollection()->addQueryFilter($query);
+        $query = $this->getFilterQuery();
+
+        if ($query !== null) {
+            $this->getLayer()->getProductCollection()->addQueryFilter($query);
+        }
 
         return $this;
+    }
+
+    /**
+     * Current category filter query.
+     *
+     * @return \Smile\ElasticsuiteCore\Search\Request\QueryInterface
+     */
+    private function getFilterQuery()
+    {
+        return $this->filterProvider->getQueryFilter($this->getDataProvider()->getCategory());
     }
 }

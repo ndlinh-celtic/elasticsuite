@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext;
@@ -21,11 +21,13 @@ use Smile\ElasticsuiteCore\Search\Adapter\Elasticsuite\Response\QueryResponse;
 /**
  * Search engine product collection.
  *
- * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
- *
  * @category Smile
  * @package  Smile\ElasticsuiteCatalog
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
+ *
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
+ * @SuppressWarnings(PHPMD.TooManyPublicMethods)
  */
 class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
 {
@@ -45,9 +47,9 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     private $searchEngine;
 
     /**
-     * @var string
+     * @var string|QueryInterface
      */
-    private $queryText;
+    private $query;
 
     /**
      * @var string
@@ -72,11 +74,6 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     /**
      * @var array
      */
-    private $countByAttributeSet;
-
-    /**
-     * @var array
-     */
     private $fieldNameMapping = [
         'price'        => 'price.price',
         'position'     => 'category.position',
@@ -87,6 +84,25 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
      * @var boolean
      */
     private $isSpellchecked = false;
+
+    /**
+     * Pager page size backup variable.
+     * Page size is always set to false in _renderFiltersBefore() after executing the query to Elasticsearch,
+     * to be sure to pull correctly all matched products from the DB.
+     * But it needs to be reset so low-level methods like getLastPageNumber() still work.
+     *
+     * @var integer|false
+     */
+    private $originalPageSize = false;
+
+    /**
+     * @var array
+     */
+    private $countByAttributeSet;
+    /**
+     * @var array
+     */
+    private $countByAttributeCode;
 
     /**
      * Constructor.
@@ -187,7 +203,38 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
      */
     public function setOrder($attribute, $dir = self::SORT_ORDER_DESC)
     {
-        $this->_orders[$attribute] = $dir;
+        if (!isset($this->_orders[$attribute]) || ($this->_orders[$attribute] !== $dir)) {
+            $this->_orders[$attribute] = $dir;
+            // Reset Filter Rendering, because otherwise the new ordering will not be picked up by ::_renderFiltersBefore.
+            $this->_isFiltersRendered = false;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Reset the sort order.
+     *
+     * @return self
+     */
+    public function resetOrder()
+    {
+        $this->_orders = [];
+
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setPageSize($size)
+    {
+        /*
+         * Explicitely setting the page size to false or null is to be treated as having not set any page size.
+         * That is: no pagination, all items are expected.
+         */
+        $size = ($size === null) ? false : $size;
+        $this->_pageSize = $size;
 
         return $this;
     }
@@ -208,7 +255,11 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
      */
     public function addAttributeToSort($attribute, $dir = self::SORT_ORDER_ASC)
     {
-        return $this->setOrder($attribute, $dir);
+        if ($attribute !== 'entity_id') {
+            return $this->setOrder($attribute, $dir);
+        }
+
+        return $this;
     }
 
     /**
@@ -226,7 +277,23 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     }
 
     /**
-     * Add search query filter
+     * Set search query filter in the collection.
+     *
+     * @param string|QueryInterface $query Search query text.
+     *
+     * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
+     */
+    public function setSearchQuery($query)
+    {
+        $this->query = $query;
+
+        return $this;
+    }
+
+    /**
+     * Add search query filter.
+     *
+     * @deprecated Replaced by setSearchQuery
      *
      * @param string $query Search query text.
      *
@@ -234,26 +301,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
      */
     public function addSearchFilter($query)
     {
-        $this->queryText = $query;
-
-        return $this;
-    }
-
-    /**
-     * Append a facet to the collection
-     *
-     * @param string $field       Facet field.
-     * @param string $facetType   Facet type.
-     * @param array  $facetConfig Facet config params.
-     * @param array  $facetFilter Facet filter.
-     *
-     * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
-     */
-    public function addFacet($field, $facetType, $facetConfig, $facetFilter = null)
-    {
-        $this->facets[$field] = ['type' => $facetType, 'filter' => $facetFilter, 'config' => $facetConfig];
-
-        return $this;
+        return $this->setSearchQuery($query);
     }
 
     /**
@@ -274,7 +322,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
         if ($bucket) {
             foreach ($bucket->getValues() as $value) {
                 $metrics = $value->getMetrics();
-                $result[$metrics['value']] = $metrics;
+                $result[$value->getValue()] = $metrics;
             }
         }
 
@@ -319,20 +367,6 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     }
 
     /**
-     * Load the product count by attribute set id.
-     *
-     * @return array
-     */
-    public function getProductCountByAttributeSetId()
-    {
-        if ($this->countByAttributeSet === null) {
-            $this->loadProductCounts();
-        }
-
-        return $this->countByAttributeSet;
-    }
-
-    /**
      * Filter in stock product.
      *
      * @return \Smile\ElasticsuiteCatalog\Model\ResourceModel\Product\Fulltext\Collection
@@ -374,6 +408,24 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     }
 
     /**
+     * Get actual page size if is defined or return all results.
+     *
+     * @return integer|false
+     */
+    public function getPageSize()
+    {
+        if ($this->_pageSize !== false) {
+            return $this->_pageSize;
+        }
+
+        if ($this->originalPageSize !== false) {
+            return $this->originalPageSize;
+        }
+
+        return $this->getSize();
+    }
+
+    /**
      * @SuppressWarnings(PHPMD.CamelCaseMethodName)
      *
      * {@inheritdoc}
@@ -400,11 +452,32 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
         }
 
         $this->getSelect()->where('e.entity_id IN (?)', ['in' => $docIds]);
-        $this->_pageSize = false;
+        $orderList = join(',', $docIds);
+        $this->getSelect()->reset(\Magento\Framework\DB\Select::ORDER);
+        $this->getSelect()->order(new \Zend_Db_Expr("FIELD(e.entity_id,$orderList)"));
+
+        $this->originalPageSize = $this->getPageSize();
 
         $this->isSpellchecked = $searchRequest->isSpellchecked();
 
         return parent::_renderFiltersBefore();
+    }
+
+    /**
+     * Set _pageSize false since it is managed by the engine and might have been changed since _renderFiltersBefore.
+     *
+     * @SuppressWarnings(PHPMD.CamelCaseMethodName)
+     *
+     * {@inheritDoc}
+     */
+    protected function _beforeLoad()
+    {
+        if ($this->_pageSize !== false) {
+            $this->originalPageSize = $this->_pageSize;
+            $this->_pageSize = false;
+        }
+
+        return parent::_beforeLoad();
     }
 
     /**
@@ -438,19 +511,71 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
     protected function _afterLoad()
     {
         // Resort items according the search response.
-        $orginalItems = $this->_items;
-        $this->_items = [];
+        $originalItems = $this->_items;
+        $this->_items  = [];
 
         foreach ($this->queryResponse->getIterator() as $document) {
             $documentId = $document->getId();
-            if (isset($orginalItems[$documentId])) {
-                $orginalItems[$documentId]->setDocumentScore($document->getScore());
-                $orginalItems[$documentId]->setDocumentSource($document->getSource());
-                $this->_items[$documentId] = $orginalItems[$documentId];
+            if (isset($originalItems[$documentId])) {
+                $originalItems[$documentId]->setDocumentScore($document->getScore());
+                $originalItems[$documentId]->setDocumentSource($document->getSource());
+                $this->_items[$documentId] = $originalItems[$documentId];
             }
         }
 
+        if (false === $this->_pageSize && false !== $this->originalPageSize) {
+            $this->_pageSize = $this->originalPageSize;
+        }
+
         return parent::_afterLoad();
+    }
+
+    /**
+     * Load product count :
+     *  - collection size
+     *  - number of products by attribute set (legacy)
+     *  - number of products by attribute code
+     *
+     * @return void
+     */
+    private function loadProductCounts(): void
+    {
+        $storeId     = $this->getStoreId();
+        $requestName = $this->searchRequestName;
+        $facets = [
+            ['name' => 'attribute_set_id', 'type' => BucketInterface::TYPE_TERM, 'size' => 0],
+            ['name' => 'indexed_attributes', 'type' => BucketInterface::TYPE_TERM, 'size' => 0],
+        ];
+        $searchRequest = $this->requestBuilder->create(
+            $storeId,
+            $requestName,
+            0,
+            0,
+            $this->query,
+            [],
+            $this->filters,
+            $this->queryFilters,
+            $facets
+        );
+        $searchResponse = $this->searchEngine->search($searchRequest);
+        $this->_totalRecords        = $searchResponse->count();
+        $this->countByAttributeSet  = [];
+        $this->countByAttributeCode = [];
+        $this->isSpellchecked       = $searchRequest->isSpellchecked();
+        $attributeSetIdBucket = $searchResponse->getAggregations()->getBucket('attribute_set_id');
+        $attributeCodeBucket  = $searchResponse->getAggregations()->getBucket('indexed_attributes');
+        if ($attributeSetIdBucket) {
+            foreach ($attributeSetIdBucket->getValues() as $value) {
+                $metrics = $value->getMetrics();
+                $this->countByAttributeSet[$value->getValue()] = $metrics['count'];
+            }
+        }
+        if ($attributeCodeBucket) {
+            foreach ($attributeCodeBucket->getValues() as $value) {
+                $metrics = $value->getMetrics();
+                $this->countByAttributeCode[$value->getValue()] = $metrics['count'];
+            }
+        }
     }
 
     /**
@@ -465,11 +590,8 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
         $searchRequestName = $this->searchRequestName;
 
         // Pagination params.
-        $size = $this->_pageSize ? $this->_pageSize : 20;
+        $size = $this->getPageSize();
         $from = $size * (max(1, $this->_curPage) - 1);
-
-        // Query text.
-        $queryText = $this->queryText;
 
         // Setup sort orders.
         $sortOrders = $this->prepareSortOrders();
@@ -479,7 +601,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
             $searchRequestName,
             $from,
             $size,
-            $queryText,
+            $this->query,
             $sortOrders,
             $this->filters,
             $this->queryFilters,
@@ -502,6 +624,7 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
 
         foreach ($this->_orders as $attribute => $direction) {
             $sortParams = ['direction' => $direction];
+            $sortField  = $this->mapFieldName($attribute);
 
             if ($useProductuctLimitation && isset($this->_productLimitationFilters['sortParams'][$attribute])) {
                 $sortField  = $this->_productLimitationFilters['sortParams'][$attribute]['sortField'];
@@ -515,7 +638,6 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
                 $sortParams['nestedFilter'] = ['price.customer_group_id' => $customerGroupId];
             }
 
-            $sortField = $this->mapFieldName($attribute);
             $sortOrders[$sortField] = $sortParams;
         }
 
@@ -537,50 +659,5 @@ class Collection extends \Magento\Catalog\Model\ResourceModel\Product\Collection
         }
 
         return $fieldName;
-    }
-
-    /**
-     * Load product count :
-     *  - collection size
-     *  - number of products by attribute set
-     *
-     * @return void
-     */
-    private function loadProductCounts()
-    {
-        $storeId     = $this->getStoreId();
-        $requestName = $this->searchRequestName;
-
-        // Query text.
-        $queryText = $this->queryText;
-
-        $setIdFacet = ['attribute_set_id' => ['type' => BucketInterface::TYPE_TERM, 'config' => ['size' => 0]]];
-
-        $searchRequest = $this->requestBuilder->create(
-            $storeId,
-            $requestName,
-            0,
-            0,
-            $queryText,
-            [],
-            $this->filters,
-            $this->queryFilters,
-            $setIdFacet
-        );
-
-        $searchResponse = $this->searchEngine->search($searchRequest);
-
-        $this->_totalRecords       = $searchResponse->count();
-        $this->countByAttributeSet = [];
-        $this->isSpellchecked = $searchRequest->isSpellchecked();
-
-        $bucket = $searchResponse->getAggregations()->getBucket('attribute_set_id');
-
-        if ($bucket) {
-            foreach ($bucket->getValues() as $value) {
-                $metrics = $value->getMetrics();
-                $this->countByAttributeSet[$metrics['value']] = $metrics['count'];
-            }
-        }
     }
 }

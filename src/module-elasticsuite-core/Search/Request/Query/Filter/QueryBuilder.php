@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -37,29 +37,32 @@ class QueryBuilder
      * @var array
      */
     private $mappedConditions = [
-        'eq'    => 'values',
-        'seq'   => 'values',
-        'in'    => 'values',
-        'from'  => 'gte',
-        'moreq' => 'gte',
-        'gteq'  => 'gte',
-        'to'    => 'lte',
-        'lteq'  => 'lte',
+        'eq'       => 'values',
+        'neq'      => 'values',
+        'seq'      => 'values',
+        'sneq'     => 'values',
+        'in'       => 'values',
+        'nin'      => 'values',
+        'from'     => 'gte',
+        'moreq'    => 'gte',
+        'gteq'     => 'gte',
+        'to'       => 'lte',
+        'lteq'     => 'lte',
+        'like'     => 'queryText',
+        'fulltext' => 'queryText',
+        'match'    => 'queryText',
+        'in_set'   => 'values',
     ];
 
     /**
      * @var array
      */
-    private $unsupportedConditions = [
-        'like',
-        'nin',
-        'notnull',
-        'null',
-        'finset',
-        'regexp',
-        'sneq',
-        'neq',
-    ];
+    private $rangeConditions = ['gt', 'gte', 'lt', 'lte'];
+
+    /**
+     * @var array
+     */
+    private $negativeConditions = ['neq', 'sneq', 'nin'];
 
     /**
      * Constructor.
@@ -78,10 +81,11 @@ class QueryBuilder
      *
      * @param ContainerConfigurationInterface $containerConfig Search request container configuration.
      * @param array                           $filters         Filters to be built.
+     * @param string|null                     $currentPath     Current nested path or null.
      *
      * @return QueryInterface
      */
-    public function create(ContainerConfigurationInterface $containerConfig, array $filters)
+    public function create(ContainerConfigurationInterface $containerConfig, array $filters, $currentPath = null)
     {
         $queries = [];
 
@@ -92,12 +96,7 @@ class QueryBuilder
                 $queries[] = $condition;
             } else {
                 $mappingField = $mapping->getField($fieldName);
-
-                if ($mappingField->isFilterable() === false) {
-                    throw new \LogicException("Field {$fieldName} is not filterable.");
-                }
-
-                $queries[] = $this->prepareFieldCondition($mappingField, $condition);
+                $queries[]    = $this->prepareFieldCondition($mappingField, $condition, $currentPath);
             }
         }
 
@@ -113,31 +112,74 @@ class QueryBuilder
     /**
      * Transform the condition into a search request query object.
      *
-     * @param FieldInterface $field     Filter field.
-     * @param array|string   $condition Filter condition.
+     * @param FieldInterface $field       Filter field.
+     * @param array|string   $condition   Filter condition.
+     * @param string|null    $currentPath Current nested path or null.
      *
      * @return QueryInterface
      */
-    private function prepareFieldCondition(FieldInterface $field, $condition)
+    private function prepareFieldCondition(FieldInterface $field, $condition, $currentPath)
     {
         $queryType = QueryInterface::TYPE_TERMS;
         $condition = $this->prepareCondition($condition);
 
-        if (count(array_intersect(['gt', 'gte', 'lt', 'lte'], array_keys($condition))) > 1) {
+        if (count(array_intersect($this->rangeConditions, array_keys($condition))) >= 1) {
             $queryType = QueryInterface::TYPE_RANGE;
             $condition = ['bounds' => $condition];
         }
 
         $condition['field'] = $field->getMappingProperty(FieldInterface::ANALYZER_UNTOUCHED);
 
+        if ($condition['field'] === null || isset($condition['queryText'])) {
+            $analyzer = $field->getDefaultSearchAnalyzer();
+            $property = $field->getMappingProperty($analyzer);
+            if ($property) {
+                $condition['field'] = $property;
+
+                if (isset($condition['queryText'])) {
+                    $queryType = QueryInterface::TYPE_MATCH;
+                    $condition['minimumShouldMatch'] = '100%';
+                }
+            }
+        }
+
         $query = $this->queryFactory->create($queryType, $condition);
 
-        if ($field->isNested()) {
+        if ($this->isNestedField($field, $currentPath)) {
             $queryParams = ['path' => $field->getNestedPath(), 'query' => $query];
             $query = $this->queryFactory->create(QueryInterface::TYPE_NESTED, $queryParams);
         }
 
+        if (isset($condition['negative'])) {
+            $query = $this->queryFactory->create(QueryInterface::TYPE_NOT, ['query' => $query]);
+        }
+
         return $query;
+    }
+
+    /**
+     * @param FieldInterface $field       Filter field.
+     * @param string|null    $currentPath Current nested path or null.
+     *
+     * @return bool
+     * @throws \LogicException
+     */
+    private function isNestedField(FieldInterface $field, $currentPath)
+    {
+        $isNested = $field->isNested();
+
+        if ($currentPath !== null) {
+            if ($field->isNested() && ($field->getNestedPath() !== $currentPath)) {
+                throw new \LogicException("Can not filter nested field {$field->getName()} with nested path $currentPath");
+            }
+            if (!$field->isNested()) {
+                 throw new \LogicException("Can not filter non nested field {$field->getName()} in nested context ($currentPath)");
+            }
+
+            $isNested = false;
+        }
+
+        return $isNested;
     }
 
     /**
@@ -150,23 +192,27 @@ class QueryBuilder
     private function prepareCondition($condition)
     {
         if (!is_array($condition)) {
-            $condition = ['values' => [$condition]];
+            $condition = ['in' => [$condition]];
         }
 
         $conditionKeys = array_keys($condition);
 
         if (is_integer(current($conditionKeys))) {
-            $condition = ['values' => $condition];
+            $condition = ['in' => $condition];
         }
 
         foreach ($condition as $key => $value) {
-            if (in_array($key, $this->unsupportedConditions)) {
+            if (!isset($this->mappedConditions[$key]) && !in_array($key, $this->rangeConditions)) {
                 throw new \LogicException("Condition {$key} is not supported.");
             }
 
             if (isset($this->mappedConditions[$key])) {
                 $condition[$this->mappedConditions[$key]] = $value;
                 unset($condition[$key]);
+            }
+
+            if (in_array($key, $this->negativeConditions)) {
+                $condition['negative'] = true;
             }
         }
 

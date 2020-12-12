@@ -1,22 +1,20 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteThesaurus
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteThesaurus\Controller\Adminhtml\Thesaurus;
 
-use Magento\Backend\App\Action\Context;
 use Magento\Framework\Exception\NoSuchEntityException;
-use Magento\Framework\View\Result\PageFactory;
 use Smile\ElasticsuiteThesaurus\Api\Data\ThesaurusInterface;
-use Smile\ElasticsuiteThesaurus\Api\ThesaurusRepositoryInterface;
 use Smile\ElasticsuiteThesaurus\Controller\Adminhtml\AbstractThesaurus as ThesaurusController;
 use Smile\ElasticsuiteThesaurus\Model\ThesaurusFactory;
 

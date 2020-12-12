@@ -1,19 +1,18 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Smile_ElasticsuiteCore dependency injection configuration.
+ * Smile_ElasticsuiteThesaurus dependency injection configuration.
  *
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- *
  * @category  Smile
- * @package   Smile\ElasticsuiteCore
+ * @package   Smile\ElasticsuiteThesaurus
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
  -->
@@ -30,4 +29,21 @@
     <preference for="Smile\ElasticsuiteThesaurus\Api\ThesaurusRepositoryInterface" type="Smile\ElasticsuiteThesaurus\Model\ThesaurusRepository" />
     <preference for="Smile\ElasticsuiteThesaurus\Api\Data\ThesaurusInterface" type="Smile\ElasticsuiteThesaurus\Model\Thesaurus" />
     <preference for="Smile\ElasticsuiteThesaurus\Api\Data\ThesaurusSearchResultsInterface" type="Magento\Framework\Api\SearchResults" />
+
+    <!-- Inject this special index type into the indices module configuration -->
+    <type name="Smile\ElasticsuiteIndices\Model\IndicesList">
+        <arguments>
+            <argument name="specialIndices" xsi:type="array">
+                <item name="thesaurus" xsi:type="const">Smile\ElasticsuiteThesaurus\Model\Index::INDEX_IDENTIER</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <type name="Magento\ImportExport\Model\Import\SampleFileProvider">
+        <arguments>
+            <argument name="samples" xsi:type="array">
+                <item name="thesaurus" xsi:type="string">Smile_ElasticsuiteThesaurus</item>
+            </argument>
+        </arguments>
+    </type>
 </config>

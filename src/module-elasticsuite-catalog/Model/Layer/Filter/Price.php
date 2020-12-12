@@ -2,18 +2,19 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Model\Layer\Filter;
 
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
+use Smile\ElasticsuiteCore\Search\Request\QueryInterface;
 
 /**
  * Product price filter implementation.
@@ -44,6 +45,11 @@ class Price extends \Magento\CatalogSearch\Model\Layer\Filter\Price
     private $priceCurrency;
 
     /**
+     * @var \Smile\ElasticsuiteCore\Search\Request\Query\QueryFactory
+     */
+    private $queryFactory;
+
+    /**
      * Constructor.
      *
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
@@ -58,6 +64,7 @@ class Price extends \Magento\CatalogSearch\Model\Layer\Filter\Price
      * @param \Magento\Framework\Pricing\PriceCurrencyInterface             $priceCurrency       Price currency.
      * @param \Magento\Catalog\Model\Layer\Filter\Dynamic\AlgorithmFactory  $algorithmFactory    Algorithm factory.
      * @param \Magento\Catalog\Model\Layer\Filter\DataProvider\PriceFactory $dataProviderFactory Data provider.
+     * @param \Smile\ElasticsuiteCore\Search\Request\Query\QueryFactory     $queryFactory        Query Factory.
      * @param array                                                         $data                Custom data.
      */
     public function __construct(
@@ -71,6 +78,7 @@ class Price extends \Magento\CatalogSearch\Model\Layer\Filter\Price
         \Magento\Framework\Pricing\PriceCurrencyInterface $priceCurrency,
         \Magento\Catalog\Model\Layer\Filter\Dynamic\AlgorithmFactory $algorithmFactory,
         \Magento\Catalog\Model\Layer\Filter\DataProvider\PriceFactory $dataProviderFactory,
+        \Smile\ElasticsuiteCore\Search\Request\Query\QueryFactory $queryFactory,
         array $data = []
     ) {
         parent::__construct(
@@ -90,46 +98,23 @@ class Price extends \Magento\CatalogSearch\Model\Layer\Filter\Price
         $this->dataProvider    = $dataProviderFactory->create(['layer' => $this->getLayer()]);
         $this->customerSession = $customerSession;
         $this->priceCurrency   = $priceCurrency;
-    }
-
-    /**
-     * Append the facet to the product collection.
-     *
-     * @return \Smile\ElasticsuiteCatalog\Model\Layer\Filter\Category
-     */
-    public function addFacetToCollection()
-    {
-        $facetField      = $this->getFilterField();
-        $facetType       = BucketInterface::TYPE_HISTOGRAM;
-        $customerGroupId = $this->customerSession->getCustomerGroupId();
-
-        $facetConfig = ['nestedFilter' => ['price.customer_group_id' => $customerGroupId]];
-
-        $calculation = $this->dataProvider->getRangeCalculationValue();
-        if ($calculation === \Magento\Catalog\Model\Layer\Filter\DataProvider\Price::RANGE_CALCULATION_MANUAL) {
-            if ((int) $this->dataProvider->getRangeStepValue() > 0) {
-                $facetConfig['interval'] = (int) $this->dataProvider->getRangeStepValue();
-            }
-        }
-
-        $productCollection = $this->getLayer()->getProductCollection();
-        $productCollection->addFacet($facetField, $facetType, $facetConfig);
-
-        return $this;
+        $this->queryFactory    = $queryFactory;
     }
 
     /**
      * @SuppressWarnings(PHPMD.CamelCaseMethodName)
+     * @SuppressWarnings(PHPMD.BooleanArgumentFlag)
      *
      * {@inheritDoc}
      */
-    protected function _renderRangeLabel($fromPrice, $toPrice)
+    protected function _renderRangeLabel($fromPrice, $toPrice, $isLast = false)
     {
-        $formattedPrice = $this->priceCurrency->format($fromPrice);
+        $formattedPrice = $this->priceCurrency->format((float) $fromPrice * $this->getCurrencyRate());
 
         if ($toPrice === '') {
             $formattedPrice = __('%1 and above', $formattedPrice);
         } elseif ($fromPrice != $toPrice || !$this->dataProvider->getOnePriceIntervalValue()) {
+            $toPrice        = (float) $toPrice * $this->getCurrencyRate();
             $formattedPrice = __('%1 - %2', $formattedPrice, $this->priceCurrency->format($toPrice));
         }
 
@@ -139,10 +124,50 @@ class Price extends \Magento\CatalogSearch\Model\Layer\Filter\Price
     /**
      * Retrieve ES filter field.
      *
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
+     *
      * @return string
      */
     private function getFilterField()
     {
         return 'price.price';
+    }
+
+    /**
+     * Create the proper query filter for price, according to current customer group Id.
+     *
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
+     *
+     * @param array $bounds The price bounds to apply
+     *
+     * @return \Smile\ElasticsuiteCore\Search\Request\QueryInterface
+     */
+    private function getRangeCondition($bounds)
+    {
+        $customerGroupId = $this->customerSession->getCustomerGroupId();
+
+        $priceQuery = $this->queryFactory->create(
+            QueryInterface::TYPE_NESTED,
+            [
+                'path'  => 'price',
+                'query' => $this->queryFactory->create(
+                    QueryInterface::TYPE_BOOL,
+                    [
+                        'must' => [
+                            $this->queryFactory->create(
+                                QueryInterface::TYPE_TERM,
+                                ['field' => 'price.customer_group_id', 'value' => $customerGroupId]
+                            ),
+                            $this->queryFactory->create(
+                                QueryInterface::TYPE_RANGE,
+                                ['field' => 'price.price', 'bounds' => $bounds]
+                            ),
+                        ],
+                    ]
+                ),
+            ]
+        );
+
+        return $priceQuery;
     }
 }

@@ -1,23 +1,25 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Api\Index\Mapping;
 
+use Smile\ElasticsuiteCore\Search\Request\SortOrderInterface;
+
 /**
- * Representation of a ElasticSearch field (abstraction of mapping properties).
+ * Representation of a Elasticsearch field (abstraction of mapping properties).
  *
- * @category Smile_Elasticsuite
+ * @category Smile
  * @package  Smile\ElasticsuiteCore
  * @author   Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -25,28 +27,25 @@ interface FieldInterface
 {
     /**
      * Field types declaration.
-     *
      */
-
-    const FIELD_TYPE_STRING  = 'string';
+    const FIELD_TYPE_TEXT    = 'text';
+    const FIELD_TYPE_KEYWORD = 'keyword';
     const FIELD_TYPE_DOUBLE  = 'double';
     const FIELD_TYPE_INTEGER = 'integer';
+    const FIELD_TYPE_LONG    = 'long';
     const FIELD_TYPE_DATE    = 'date';
     const FIELD_TYPE_BOOLEAN = 'boolean';
     const FIELD_TYPE_NESTED  = 'nested';
-    const FIELD_TYPE_MULTI   = 'multi_field';
     const FIELD_TYPE_OBJECT  = 'object';
 
     /**
      * Analyzers declarations.
      */
-
     const ANALYZER_STANDARD   = 'standard';
     const ANALYZER_WHITESPACE = 'whitespace';
     const ANALYZER_SHINGLE    = 'shingle';
     const ANALYZER_SORTABLE   = 'sortable';
     const ANALYZER_PHONETIC   = 'phonetic';
-    const ANALYZER_EDGE_NGRAM = 'edge_ngram_front';
     const ANALYZER_UNTOUCHED  = 'untouched';
 
     /**
@@ -89,13 +88,6 @@ interface FieldInterface
      * @return boolean
      */
     public function isUsedInSpellcheck();
-
-    /**
-     * Is the field used for autocomplete.
-     *
-     * @return boolean
-     */
-    public function isUsedInAutocomplete();
 
     /**
      * Weight of the fields in search.
@@ -141,4 +133,34 @@ interface FieldInterface
      * @return string|null
      */
     public function getMappingProperty($analyzer = self::ANALYZER_UNTOUCHED);
+
+    /**
+     * Return the search analyzer used by default for fulltext searches.
+     *
+     * @return string
+     */
+    public function getDefaultSearchAnalyzer();
+
+    /**
+     * Merge field config and return a new instance with the updated config.
+     *
+     * @param array $config field configuration to merge with existing.
+     *
+     * @return \Smile\ElasticsuiteCore\Api\Index\Mapping\FieldInterface
+     */
+    public function mergeConfig(array $config = []);
+
+    /**
+     * Retrieve the directive to apply for "missing" when the field is used for sort by.
+     *
+     * @param string $direction The direction used to sort
+     *
+     * @return mixed
+     */
+    public function getSortMissing($direction = SortOrderInterface::SORT_ASC);
+
+    /**
+     * @return array
+     */
+    public function getConfig();
 }

@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -16,6 +17,7 @@ namespace Smile\ElasticsuiteCore\Setup;
 use \Magento\Framework\Setup\InstallSchemaInterface;
 use \Magento\Framework\Setup\ModuleContextInterface;
 use \Magento\Framework\Setup\SchemaSetupInterface;
+use \Smile\ElasticsuiteCore\Setup\CoreSetupFactory;
 
 /**
  * Core Module Installer
@@ -26,6 +28,21 @@ use \Magento\Framework\Setup\SchemaSetupInterface;
  */
 class InstallSchema implements InstallSchemaInterface
 {
+    /**
+     * @var CoreSetup
+     */
+    private $coreSetup;
+
+    /**
+     * InstallSchema constructor.
+     *
+     * @param \Smile\ElasticsuiteCore\Setup\CoreSetupFactory $coreSetupFactory Core Setup Factory
+     */
+    public function __construct(CoreSetupFactory $coreSetupFactory)
+    {
+        $this->coreSetup = $coreSetupFactory->create();
+    }
+
     /**
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      *
@@ -38,57 +55,9 @@ class InstallSchema implements InstallSchemaInterface
      */
     public function install(SchemaSetupInterface $setup, ModuleContextInterface $context)
     {
-        $connection = $setup->getConnection();
-
         $setup->startSetup();
 
-        /**
-         * Create table 'smile_elasticsuite_relevance_config_data'
-         */
-        $table = $connection->newTable(
-            $setup->getTable('smile_elasticsuite_relevance_config_data')
-        )->addColumn(
-            'config_id',
-            \Magento\Framework\DB\Ddl\Table::TYPE_INTEGER,
-            null,
-            ['identity' => true, 'unsigned' => true, 'nullable' => false, 'primary' => true],
-            'Config Id'
-        )->addColumn(
-            'scope',
-            \Magento\Framework\DB\Ddl\Table::TYPE_TEXT,
-            30,
-            ['nullable' => false, 'default' => 'default'],
-            'Config Scope'
-        )->addColumn(
-            'scope_code',
-            \Magento\Framework\DB\Ddl\Table::TYPE_TEXT,
-            30,
-            ['nullable' => false, 'default' => 'default'],
-            'Config Scope Code'
-        )->addColumn(
-            'path',
-            \Magento\Framework\DB\Ddl\Table::TYPE_TEXT,
-            255,
-            ['nullable' => false, 'default' => 'general'],
-            'Config Path'
-        )->addColumn(
-            'value',
-            \Magento\Framework\DB\Ddl\Table::TYPE_TEXT,
-            '64k',
-            [],
-            'Config Value'
-        )->addIndex(
-            $setup->getIdxName(
-                'smile_elasticsuite_relevance_config_data',
-                ['scope', 'scope_id', 'path'],
-                \Magento\Framework\DB\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE
-            ),
-            ['scope', 'scope_code', 'path'],
-            ['type' => \Magento\Framework\DB\Adapter\AdapterInterface::INDEX_TYPE_UNIQUE]
-        )->setComment(
-            'Smile Elastic Suite Relevance Config Data'
-        );
-        $connection->createTable($table);
+        $this->coreSetup->createRelevanceConfigTable($setup);
 
         $setup->endSetup();
     }

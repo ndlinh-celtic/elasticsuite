@@ -2,14 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
- *
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteVirtualCategory
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -92,8 +91,9 @@ class Preview extends Action
     {
         $category = $this->getCategory();
         $pageSize = $this->getPageSize();
+        $search = $this->getRequest()->getParam('search');
 
-        return $this->previewModelFactory->create(['category' => $category, 'size' => $pageSize]);
+        return $this->previewModelFactory->create(['category' => $category, 'size' => $pageSize, 'search' => $search]);
     }
 
     /**

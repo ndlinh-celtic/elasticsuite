@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Block\Navigation\Renderer;
@@ -57,6 +58,10 @@ class PriceSlider extends Slider
 
         if ($this->isManualCalculation() && ($this->getStepValue() > 0)) {
             $config['step'] = $this->getStepValue();
+        }
+
+        if ($this->getFilter()->getCurrencyRate()) {
+            $config['rate'] = $this->getFilter()->getCurrencyRate();
         }
 
         return $config;

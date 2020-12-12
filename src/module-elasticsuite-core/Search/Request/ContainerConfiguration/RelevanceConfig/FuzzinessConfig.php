@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Search\Request\ContainerConfiguration\RelevanceConfig;
@@ -29,12 +30,12 @@ class FuzzinessConfig implements FuzzinessConfigurationInterface
     private $value;
 
     /**
-     * @var int The prefix length
+     * @var integer The prefix length
      */
     private $prefixLength;
 
     /**
-     * @var int Max. expansion
+     * @var integer Max. expansion
      */
     private $maxExpansion;
 

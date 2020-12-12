@@ -1,33 +1,26 @@
 <?php
 /**
- * DISCLAIMER :
+ * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCore\Index;
 
-use Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface;
-use Magento\Framework\ObjectManagerInterface;
-use Smile\ElasticsuiteCore\Api\Index\IndexInterface;
-use Smile\ElasticsuiteCore\Api\Client\ClientFactoryInterface;
-use Smile\ElasticsuiteCore\Api\Index\IndexSettingsInterface;
-use Smile\ElasticsuiteCore\Api\Index\Bulk\BulkRequestInterface;
-use Psr\Log\LoggerInterface;
 use Smile\ElasticsuiteCore\Api\Index\Bulk\BulkResponseInterface;
+use Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface;
 
 /**
  * Default implementation of operation on indices (\Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface).
  *
- *
- * @category  Smile_Elasticsuite
+ * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
  */
@@ -39,7 +32,7 @@ class IndexOperation implements IndexOperationInterface
     private $objectManager;
 
     /**
-     * @var \Smile\ElasticsuiteCore\Api\Index\IndexInterface\IndexInterface[]
+     * @var \Smile\ElasticsuiteCore\Api\Index\IndexInterface[]
      */
     private $indicesByIdentifier = [];
 
@@ -54,31 +47,31 @@ class IndexOperation implements IndexOperationInterface
     private $indicesConfiguration;
 
     /**
-     * @var \Elasticsearch\Client
+     * @var \Smile\ElasticsuiteCore\Api\Client\ClientInterface
      */
     private $client;
 
     /**
-     * @var \Psr\Log\LoggerInterface;
+     * @var \Psr\Log\LoggerInterface
      */
     private $logger;
 
     /**
      * Instanciate the index operation manager.
      *
-     * @param ObjectManagerInterface $objectManager Object manager.
-     * @param ClientFactoryInterface $clientFactory ES client factory.
-     * @param IndexSettingsInterface $indexSettings ES settings.
-     * @param LoggerInterface        $logger        Logger access.
+     * @param \Magento\Framework\ObjectManagerInterface                $objectManager Object manager.
+     * @param \Smile\ElasticsuiteCore\Api\Client\ClientInterface       $client        ES client.
+     * @param \Smile\ElasticsuiteCore\Api\Index\IndexSettingsInterface $indexSettings ES settings.
+     * @param \Psr\Log\LoggerInterface                                 $logger        Logger access.
      */
     public function __construct(
-        ObjectManagerInterface $objectManager,
-        ClientFactoryInterface $clientFactory,
-        IndexSettingsInterface $indexSettings,
-        LoggerInterface $logger
+        \Magento\Framework\ObjectManagerInterface $objectManager,
+        \Smile\ElasticsuiteCore\Api\Client\ClientInterface $client,
+        \Smile\ElasticsuiteCore\Api\Index\IndexSettingsInterface $indexSettings,
+        \Psr\Log\LoggerInterface $logger
     ) {
         $this->objectManager        = $objectManager;
-        $this->client               = $clientFactory->createClient();
+        $this->client               = $client;
         $this->indexSettings        = $indexSettings;
         $this->indicesConfiguration = $indexSettings->getIndicesConfig();
         $this->logger               = $logger;
@@ -107,7 +100,7 @@ class IndexOperation implements IndexOperationInterface
 
         if (!isset($this->indicesByIdentifier[$indexIdentifier])) {
             $indexName = $this->indexSettings->getIndexAliasFromIdentifier($indexIdentifier, $store);
-            $exists = $this->client->indices()->exists(['index' => $indexName]);
+            $exists = $this->client->indexExists($indexName);
         }
 
         return $exists;
@@ -123,7 +116,7 @@ class IndexOperation implements IndexOperationInterface
         if (!isset($this->indicesByIdentifier[$indexAlias])) {
             if (!$this->indexExists($indexIdentifier, $store)) {
                 throw new \LogicException(
-                    "{$indexIdentifier} index does not exist yet. Make sure everything is reindexed"
+                    "{$indexIdentifier} index does not exist yet. Make sure everything is reindexed."
                 );
             }
             $this->initIndex($indexIdentifier, $store, true);
@@ -138,14 +131,14 @@ class IndexOperation implements IndexOperationInterface
     public function createIndex($indexIdentifier, $store)
     {
         $index         = $this->initIndex($indexIdentifier, $store, false);
-        $indexSettings = ['settings' => $this->indexSettings->getCreateIndexSettings()];
+        $indexSettings = [
+            'settings' => $this->indexSettings->getCreateIndexSettings() + $this->indexSettings->getDynamicIndexSettings($store),
+        ];
         $indexSettings['settings']['analysis'] = $this->indexSettings->getAnalysisSettings($store);
 
-        foreach ($index->getTypes() as $currentType) {
-            $indexSettings['mappings'][$currentType->getName()] = $currentType->getMapping()->asArray();
-        }
+        $this->client->createIndex($index->getName(), $indexSettings);
 
-        $this->client->indices()->create(['index' => $index->getName(), 'body' => $indexSettings]);
+        $this->client->putMapping($index->getName(), $index->getMapping()->asArray());
 
         return $index;
     }
@@ -153,17 +146,15 @@ class IndexOperation implements IndexOperationInterface
     /**
      * {@inheritDoc}
      */
-    public function installIndex(IndexInterface $index, $store)
+    public function installIndex(\Smile\ElasticsuiteCore\Api\Index\IndexInterface $index, $store)
     {
         if ($index->needInstall()) {
             $indexIdentifier = $index->getIdentifier();
             $indexName       = $index->getName();
             $indexAlias      = $this->indexSettings->getIndexAliasFromIdentifier($indexIdentifier, $store);
 
-            $this->client->indices()->optimize(['index' => $indexName]);
-            $this->client->indices()->putSettings(
-                ['index' => $indexName, 'body' => $this->indexSettings->getInstallIndexSettings()]
-            );
+            $this->client->forceMerge($indexName);
+            $this->client->putIndexSettings($indexName, $this->indexSettings->getInstallIndexSettings());
 
             $this->proceedIndexInstall($indexName, $indexAlias);
         }
@@ -182,55 +173,25 @@ class IndexOperation implements IndexOperationInterface
     /**
      * {@inheritDoc}
      */
-    public function executeBulk(BulkRequestInterface $bulk)
+    public function executeBulk(\Smile\ElasticsuiteCore\Api\Index\Bulk\BulkRequestInterface $bulk)
     {
-        $bulkParams = ['body' => $bulk->getOperations()];
-
-        $rawBulkResponse = $this->client->bulk($bulkParams);
-
-        /**
-         * @var BulkResponseInterface
-         */
-        $bulkResponse = $this->objectManager->create(
-            'Smile\ElasticsuiteCore\Api\Index\Bulk\BulkResponseInterface',
-            ['rawResponse' => $rawBulkResponse]
-        );
-
-        if ($bulkResponse->hasErrors()) {
-            foreach ($bulkResponse->aggregateErrorsByReason() as $error) {
-                $sampleDocumentIds = implode(', ', array_slice($error['document_ids'], 0, 10));
-                $errorMessages = [
-                    sprintf(
-                        "Bulk %s operation failed %d times in index %s for type %s",
-                        $error['operation'],
-                        $error['count'],
-                        $error['index'],
-                        $error['document_type']
-                    ),
-                    sprintf(
-                        "Error (%s) : %s",
-                        $error['error']['type'],
-                        $error['error']['reason']
-                    ),
-                    sprintf(
-                        "Failed doc ids sample : %s",
-                        $sampleDocumentIds
-                    ),
-                ];
-                $this->logger->error(implode(" ", $errorMessages));
-            }
+        if ($bulk->isEmpty()) {
+            throw new \LogicException('Can not execute empty bulk.');
         }
 
-        return $bulkResponse;
+        $bulkParams      = ['body' => $bulk->getOperations()];
+        $rawBulkResponse = $this->client->bulk($bulkParams);
+
+        return $this->parseBulkResponse($rawBulkResponse);
     }
 
     /**
      * {@inheritDoc}
      */
-    public function refreshIndex(IndexInterface $index)
+    public function refreshIndex(\Smile\ElasticsuiteCore\Api\Index\IndexInterface $index)
     {
         try {
-            $this->client->indices()->refresh(['index' => $index->getName()]);
+            $this->client->refreshIndex($index->getName());
         } catch (\Exception $e) {
             $this->logger->error($e->getMessage());
         }
@@ -254,39 +215,81 @@ class IndexOperation implements IndexOperationInterface
         $aliasActions   = [['add' => ['index' => $indexName, 'alias' => $indexAlias]]];
         $deletedIndices = [];
 
-        try {
-            $oldIndices = $this->client->indices()->getMapping(['index' => $indexAlias]);
-        } catch (\Elasticsearch\Common\Exceptions\Missing404Exception $e) {
-            $oldIndices = [];
-        }
+        $oldIndices = $this->client->getIndicesNameByAlias($indexAlias);
 
-        foreach (array_keys($oldIndices) as $oldIndexName) {
+        foreach ($oldIndices as $oldIndexName) {
             if ($oldIndexName != $indexName) {
                 $deletedIndices[] = $oldIndexName;
                 $aliasActions[]   = ['remove' => ['index' => $oldIndexName, 'alias' => $indexAlias]];
             }
         }
 
-        $this->client->indices()->updateAliases(['body' => ['actions' => $aliasActions]]);
+        $this->client->updateAliases($aliasActions);
 
         foreach ($deletedIndices as $deletedIndex) {
-            $this->client->indices()->delete(['index' => $deletedIndex]);
+            $this->client->deleteIndex($deletedIndex);
         }
     }
 
     /**
+     * Compute and process a raw bulk response to a bulk response object.
+     *
+     * @param array $rawBulkResponse The raw bulk response from the client.
+     *
+     * @return BulkResponseInterface
+     */
+    protected function parseBulkResponse(array $rawBulkResponse)
+    {
+        /**
+         * @var \Smile\ElasticsuiteCore\Api\Index\Bulk\BulkResponseInterface
+         */
+        $bulkResponse = $this->objectManager->create(
+            'Smile\ElasticsuiteCore\Api\Index\Bulk\BulkResponseInterface',
+            ['rawResponse' => $rawBulkResponse]
+        );
+
+        if ($bulkResponse->hasErrors()) {
+            foreach ($bulkResponse->aggregateErrorsByReason() as $error) {
+                $sampleDocumentIds = implode(', ', array_slice($error['document_ids'], 0, 10));
+                $errorMessages = [
+                    sprintf(
+                        "Bulk %s operation failed %d times in index %s for type %s.",
+                        $error['operation'],
+                        $error['count'],
+                        $error['index'],
+                        $error['document_type']
+                    ),
+                    sprintf(
+                        "Error (%s) : %s.",
+                        $error['error']['type'],
+                        $error['error']['reason']
+                    ),
+                    sprintf(
+                        "Failed doc ids sample : %s.",
+                        $sampleDocumentIds
+                    ),
+                ];
+                $this->logger->error(implode(" ", $errorMessages));
+            }
+        }
+
+        return $bulkResponse;
+    }
+
+    /**
+     * Init the index object.
      *
      * @param string                                                $indexIdentifier An index indentifier.
      * @param integer|string|\Magento\Store\Api\Data\StoreInterface $store           The store.
      * @param boolean                                               $existingIndex   Is the index already existing.
      *
-     * @return \Smile\ElasticsuiteCore\Api\Index\IndexInterface;
+     * @return \Smile\ElasticsuiteCore\Api\Index\IndexInterface
      */
     private function initIndex($indexIdentifier, $store, $existingIndex)
     {
         if (!isset($this->indicesConfiguration[$indexIdentifier])) {
             throw new \LogicException(
-                "No index found with identifier {$indexIdentifier} into elasticsuite_indices.xml"
+                "No index found with identifier {$indexIdentifier} into elasticsuite_indices.xml."
             );
         }
 

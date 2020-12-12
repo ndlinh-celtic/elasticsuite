@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCore\Model\Autocomplete\Terms;
@@ -97,15 +97,22 @@ class DataProvider implements DataProviderInterface
     public function getItems()
     {
         if ($this->items === null) {
-            $collection = $this->getSuggestCollection();
             $this->items = [];
-            foreach ($collection as $item) {
-                $resultItem = $this->itemFactory->create([
-                    'title' => $item->getQueryText(),
-                    'num_results' => $item->getNumResults(),
-                    'type'        => $this->getType(),
-                ]);
-                $this->items[] = $resultItem;
+
+            if ($this->configurationHelper->isEnabled($this->getType())) {
+                if (!$this->queryFactory->get()->isQueryTextShort()) {
+                    $collection = $this->getSuggestCollection();
+                    if ($collection !== null) {
+                        foreach ($collection as $item) {
+                            $resultItem = $this->itemFactory->create([
+                                'title' => $item->getQueryText(),
+                                'num_results' => $item->getNumResults(),
+                                'type' => $this->getType(),
+                            ]);
+                            $this->items[] = $resultItem;
+                        }
+                    }
+                }
             }
         }
 

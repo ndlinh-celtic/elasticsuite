@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -15,10 +16,13 @@ namespace Smile\ElasticsuiteCore\Indexer;
 
 use Magento\Framework\Indexer\SaveHandler\IndexerInterface;
 use Smile\ElasticsuiteCore\Api\Index\IndexOperationInterface;
+use Smile\ElasticsuiteCore\Api\Index\DataSourceResolverInterfaceFactory;
+use Smile\ElasticsuiteCore\Api\Index\IndexSettingsInterface;
+use Smile\ElasticsuiteCore\Helper\Cache as CacheHelper;
 use Magento\Framework\Indexer\SaveHandler\Batch;
 
 /**
- * Eav Indexing operation handling for ElasticSearch engine.
+ * Eav Indexing operation handling for Elasticsearch engine.
  *
  * @category Smile
  * @package  Smile\ElasticsuiteCatalog
@@ -39,11 +43,6 @@ class GenericIndexerHandler implements IndexerInterface
     private $batch;
 
     /**
-     * @var integer
-     */
-    private $batchSize;
-
-    /**
      * @var string
      */
     private $indexName;
@@ -54,20 +53,47 @@ class GenericIndexerHandler implements IndexerInterface
     private $typeName;
 
     /**
-     * Cosntructor
-     *
-     * @param IndexOperationInterface $indexOperation Index operation service.
-     * @param Batch                   $batch          Batch handler.
-     * @param string                  $indexName      The index name.
-     * @param string                  $typeName       The type name.
+     * @var CacheHelper
      */
-    public function __construct(IndexOperationInterface $indexOperation, Batch $batch, $indexName, $typeName)
-    {
-        $this->indexOperation = $indexOperation;
-        $this->batchSize      = $indexOperation->getBatchIndexingSize();
-        $this->batch          = $batch;
-        $this->indexName      = $indexName;
-        $this->typeName       = $typeName;
+    private $cacheHelper;
+
+    /**
+     * @var \Smile\ElasticsuiteCore\Api\Index\DataSourceResolverInterfaceFactory
+     */
+    private $dataSourceResolverFactory;
+
+    /**
+     * @var \Smile\ElasticsuiteCore\Api\Index\IndexSettingsInterface
+     */
+    private $indexSettings;
+
+    /**
+     * Constructor
+     *
+     * @param IndexOperationInterface            $indexOperation            Index operation service.
+     * @param CacheHelper                        $cacheHelper               Index caching helper.
+     * @param Batch                              $batch                     Batch handler.
+     * @param DataSourceResolverInterfaceFactory $dataSourceResolverFactory DataSource resolver.
+     * @param IndexSettingsInterface             $indexSettings             Index Settings.
+     * @param string                             $indexName                 The index name.
+     * @param string                             $typeName                  The type name.
+     */
+    public function __construct(
+        IndexOperationInterface $indexOperation,
+        CacheHelper $cacheHelper,
+        Batch $batch,
+        DataSourceResolverInterfaceFactory $dataSourceResolverFactory,
+        IndexSettingsInterface $indexSettings,
+        $indexName,
+        $typeName
+    ) {
+        $this->indexOperation            = $indexOperation;
+        $this->batch                     = $batch;
+        $this->indexName                 = $indexName;
+        $this->typeName                  = $typeName;
+        $this->cacheHelper               = $cacheHelper;
+        $this->dataSourceResolverFactory = $dataSourceResolverFactory;
+        $this->indexSettings             = $indexSettings;
     }
 
     /**
@@ -76,21 +102,32 @@ class GenericIndexerHandler implements IndexerInterface
     public function saveIndex($dimensions, \Traversable $documents)
     {
         foreach ($dimensions as $dimension) {
-            $storeId = $dimension->getValue();
-            $index = $this->indexOperation->getIndexByName($this->indexName, $storeId);
-            $type  = $index->getType($this->typeName);
+            $storeId   = $dimension->getValue();
 
-            foreach ($this->batch->getItems($documents, $this->batchSize) as $batchDocuments) {
-                foreach ($type->getDatasources() as $datasource) {
-                    $batchDocuments = $datasource->addData($storeId, $batchDocuments);
+            try {
+                $index = $this->indexOperation->getIndexByName($this->indexName, $storeId);
+            } catch (\Exception $exception) {
+                $index = $this->indexOperation->createIndex($this->indexName, $storeId);
+            }
+
+            $batchSize = $this->indexOperation->getBatchIndexingSize();
+
+            foreach ($this->batch->getItems($documents, $batchSize) as $batchDocuments) {
+                foreach ($this->getDatasources() as $datasource) {
+                    if (!empty($batchDocuments)) {
+                        $batchDocuments = $datasource->addData($storeId, $batchDocuments);
+                    }
                 }
 
-                $bulk = $this->indexOperation->createBulk()->addDocuments($index, $type, $batchDocuments);
-                $this->indexOperation->executeBulk($bulk);
+                if (!empty($batchDocuments)) {
+                    $bulk = $this->indexOperation->createBulk()->addDocuments($index, $batchDocuments);
+                    $this->indexOperation->executeBulk($bulk);
+                }
             }
 
             $this->indexOperation->refreshIndex($index);
             $this->indexOperation->installIndex($index, $storeId);
+            $this->cacheHelper->cleanIndexCache($this->indexName, $storeId);
         }
 
         return $this;
@@ -102,16 +139,19 @@ class GenericIndexerHandler implements IndexerInterface
     public function deleteIndex($dimensions, \Traversable $documents)
     {
         foreach ($dimensions as $dimension) {
-            $storeId = $dimension->getValue();
-            $index = $this->indexOperation->getIndexByName($this->indexName, $storeId);
-            $type  = $index->getType($this->typeName);
+            $storeId   = $dimension->getValue();
 
-            foreach ($this->batch->getItems($documents, $this->batchSize) as $batchDocuments) {
-                $bulk = $this->indexOperation->createBulk()->deleteDocuments($index, $type, $batchDocuments);
-                $this->indexOperation->executeBulk($bulk);
+            if ($this->indexOperation->indexExists($this->indexName, $storeId)) {
+                $index     = $this->indexOperation->getIndexByName($this->indexName, $storeId);
+                $batchSize = $this->indexOperation->getBatchIndexingSize();
+
+                foreach ($this->batch->getItems($documents, $batchSize) as $batchDocuments) {
+                    $bulk = $this->indexOperation->createBulk()->deleteDocuments($index, $batchDocuments);
+                    $this->indexOperation->executeBulk($bulk);
+                }
+
+                $this->indexOperation->refreshIndex($index);
             }
-
-            $this->indexOperation->refreshIndex($index);
         }
 
         return $this;
@@ -135,8 +175,21 @@ class GenericIndexerHandler implements IndexerInterface
     /**
      * {@inheritDoc}
      */
-    public function isAvailable()
+    public function isAvailable($dimensions = [])
     {
         return $this->indexOperation->isAvailable();
+    }
+
+    /**
+     * Retrieve data sources of an index by name.
+     *
+     * @return \Smile\ElasticsuiteCore\Api\Index\DatasourceInterface[]
+     */
+    private function getDatasources()
+    {
+        $resolver = $this->dataSourceResolverFactory->create();
+        $sources  = $resolver->getDataSources($this->indexName);
+
+        return $sources;
     }
 }

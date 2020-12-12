@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Block\Plugin\Adminhtml\Product\Attribute\Edit\Tab;
@@ -17,6 +18,7 @@ use Magento\Config\Model\Config\Source\Yesno;
 use Magento\CatalogSearch\Model\Source\Weight;
 use Magento\Framework\Data\Form;
 use Magento\Framework\Registry;
+use Smile\ElasticsuiteCatalog\Model\Attribute\Source\FilterSortOrder;
 use Smile\ElasticsuiteCore\Search\Request\BucketInterface;
 use Magento\Framework\Data\Form\Element\Fieldset;
 use Magento\Catalog\Api\Data\EavAttributeInterface;
@@ -55,17 +57,28 @@ class FrontPlugin
     private $booleanSource;
 
     /**
+     * @var \Smile\ElasticsuiteCatalog\Model\Attribute\Source\FilterSortOrder
+     */
+    private $filterSortOrder;
+
+    /**
      * Class constructor
      *
-     * @param Yesno    $booleanSource The YesNo source.
-     * @param Weight   $weightSource  Weight source.
-     * @param Registry $registry      Core registry.
+     * @param Yesno           $booleanSource   The YesNo source.
+     * @param Weight          $weightSource    Weight source.
+     * @param Registry        $registry        Core registry.
+     * @param FilterSortOrder $filterSortOrder Filter Sort Order.
      */
-    public function __construct(Yesno $booleanSource, Weight $weightSource, Registry $registry)
-    {
-        $this->weightSource  = $weightSource;
-        $this->booleanSource = $booleanSource;
-        $this->coreRegistry  = $registry;
+    public function __construct(
+        Yesno $booleanSource,
+        Weight $weightSource,
+        Registry $registry,
+        FilterSortOrder $filterSortOrder
+    ) {
+        $this->weightSource    = $weightSource;
+        $this->booleanSource   = $booleanSource;
+        $this->coreRegistry    = $registry;
+        $this->filterSortOrder = $filterSortOrder;
     }
 
     /**
@@ -87,14 +100,14 @@ class FrontPlugin
         $this->addSearchFields($fieldset);
         $this->addAutocompleteFields($fieldset);
         $this->addFacetFields($fieldset);
-
+        $this->addSortFields($fieldset);
         $this->appendSliderDisplayRelatedFields($form, $subject);
 
         if ($this->getAttribute()->getAttributeCode() == 'name') {
             $form->getElement('is_searchable')->setDisabled(1);
-            $form->getElement('is_used_in_autocomplete')->setDisabled(1);
-            $form->getElement('is_used_in_autocomplete')->setValue(1);
         }
+
+        $this->appendFieldsDependency($subject);
 
         return $block;
     }
@@ -151,6 +164,15 @@ class FrontPlugin
             }
         }
 
+        $filterableFieldNote = __('Can be used only with catalog input type Text field, Dropdown, Multiple Select and Price.');
+        if ($form->getElement('is_filterable')) {
+            $form->getElement('is_filterable')->addData(['note' => $filterableFieldNote]);
+        }
+
+        if ($form->getElement('is_filterable_in_search')) {
+            $form->getElement('is_filterable_in_search')->addData(['note' => $filterableFieldNote]);
+        }
+
         return $this;
     }
 
@@ -164,17 +186,6 @@ class FrontPlugin
     private function addAutocompleteFields(Fieldset $fieldset)
     {
         $fieldset->addField(
-            'is_used_in_autocomplete',
-            'select',
-            [
-                'name'   => 'is_used_in_autocomplete',
-                'label'  => __('Used in autocomplete'),
-                'values' => $this->booleanSource->toOptionArray(),
-            ],
-            'is_used_in_spellcheck'
-        );
-
-        $fieldset->addField(
             'is_displayed_in_autocomplete',
             'select',
             [
@@ -182,7 +193,7 @@ class FrontPlugin
                 'label'  => __('Display in autocomplete'),
                 'values' => $this->booleanSource->toOptionArray(),
             ],
-            'is_used_in_autocomplete'
+            'is_used_in_spellcheck'
         );
 
         return $this;
@@ -229,12 +240,7 @@ class FrontPlugin
             [
                 'name'   => 'facet_sort_order',
                 'label'  => __('Facet sort order'),
-                'values' => [
-                    ['value' => BucketInterface::SORT_ORDER_COUNT, 'label' => __('Result count')],
-                    ['value' => BucketInterface::SORT_ORDER_MANUAL, 'label' => __('Admin sort')],
-                    ['value' => BucketInterface::SORT_ORDER_TERM, 'label' => __('Name')],
-                    ['value' => BucketInterface::SORT_ORDER_RELEVANCE, 'label' => __('Relevance')],
-                ],
+                'values' => $this->filterSortOrder->toOptionArray(),
             ],
             'facet_max_size'
         );
@@ -271,6 +277,47 @@ class FrontPlugin
                 'values' => $this->booleanSource->toOptionArray(),
             ],
             'search_weight'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Append sorting related fields.
+     *
+     * @param Fieldset $fieldset Target fieldset
+     *
+     * @return FrontPlugin
+     */
+    private function addSortFields(Fieldset $fieldset)
+    {
+        $sortFieldsOptions = [
+            ['value' => '_first', 'label' => __("First")],
+            ['value' => '_last',  'label' => __("Last")],
+        ];
+
+        $fieldset->addField(
+            'sort_order_asc_missing',
+            'select',
+            [
+                'name'   => 'sort_order_asc_missing',
+                'label'  => __('Sort products without value when sorting ASC'),
+                'values' => $sortFieldsOptions,
+                'note'   => __('How the products which are missing values for this attribute should be treated when using it to sort.'),
+            ],
+            'used_for_sortby'
+        );
+
+        $fieldset->addField(
+            'sort_order_desc_missing',
+            'select',
+            [
+                'name'   => 'sort_order_desc_missing',
+                'label'  => __('Sort products without value when sorting DESC'),
+                'values' => $sortFieldsOptions,
+                'note'   => __('How the products which are missing values for this attribute should be treated when using it to sort.'),
+            ],
+            'sort_order_asc_missing'
         );
 
         return $this;
@@ -349,6 +396,36 @@ class FrontPlugin
         if ($isAttributeDecimal && ($attribute->getFrontendInput() !== 'price')) {
             $displayFieldset = $this->createDisplayFieldset($form, $subject);
             $this->addDisplayFields($displayFieldset);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Manage dependency between fields.
+     *
+     * @param Front $subject The StoreFront tab
+     *
+     * @return FrontPlugin
+     */
+    private function appendFieldsDependency($subject)
+    {
+        /** @var \Magento\Backend\Block\Widget\Form\Element\Dependence $dependencyBlock */
+        $dependencyBlock = $subject->getChildBlock('form_after');
+
+        if ($dependencyBlock) {
+            $dependencyBlock
+                ->addFieldMap('is_displayed_in_autocomplete', 'is_displayed_in_autocomplete')
+                ->addFieldMap('is_filterable_in_search', 'is_filterable_in_search')
+                ->addFieldMap('is_searchable', 'is_searchable')
+                ->addFieldMap('is_used_in_spellcheck', 'is_used_in_spellcheck')
+                ->addFieldMap('used_for_sort_by', 'used_for_sort_by')
+                ->addFieldMap('sort_order_asc_missing', 'sort_order_asc_missing')
+                ->addFieldMap('sort_order_desc_missing', 'sort_order_desc_missing')
+                ->addFieldDependence('is_displayed_in_autocomplete', 'is_filterable_in_search', '1')
+                ->addFieldDependence('is_used_in_spellcheck', 'is_searchable', '1')
+                ->addFieldDependence('sort_order_asc_missing', 'used_for_sort_by', '1')
+                ->addFieldDependence('sort_order_desc_missing', 'used_for_sort_by', '1');
         }
 
         return $this;

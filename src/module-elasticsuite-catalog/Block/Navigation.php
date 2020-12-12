@@ -2,24 +2,17 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
 namespace Smile\ElasticsuiteCatalog\Block;
-
-use Magento\Catalog\Model\Layer\AvailabilityFlagInterface;
-use Magento\Catalog\Model\Layer\FilterList;
-use Magento\Catalog\Model\Layer\Resolver;
-use Magento\Framework\Module\Manager;
-use Magento\Framework\ObjectManagerInterface;
-use Magento\Framework\View\Element\Template\Context;
 
 /**
  * Custom implementation of the navigation block to apply facet coverage rate.
@@ -30,15 +23,27 @@ use Magento\Framework\View\Element\Template\Context;
  */
 class Navigation extends \Magento\LayeredNavigation\Block\Navigation
 {
+    const DEFAULT_EXPANDED_FACETS_COUNT_CONFIG_XML_PATH = 'smile_elasticsuite_catalogsearch_settings/catalogsearch/expanded_facets';
+
     /**
-     * @var ObjectManagerInterface
+     * @var \Magento\Framework\ObjectManagerInterface
      */
     private $objectManager;
 
     /**
-     * @var Manager
+     * @var \Magento\Framework\Module\Manager
      */
     private $moduleManager;
+
+    /**
+     * @var string[]
+     */
+    private $inlineLayouts = ['1column'];
+
+    /**
+     * @var string|NULL
+     */
+    private $pageLayout;
 
     /**
      * Navigation constructor.
@@ -52,18 +57,18 @@ class Navigation extends \Magento\LayeredNavigation\Block\Navigation
      * @param array                                                  $data           Block Data
      */
     public function __construct(
-        Context $context,
-        Resolver $layerResolver,
-        FilterList $filterList,
-        AvailabilityFlagInterface $visibilityFlag,
-        ObjectManagerInterface $objectManager,
-        Manager $moduleManager,
+        \Magento\Framework\View\Element\Template\Context $context,
+        \Magento\Catalog\Model\Layer\Resolver $layerResolver,
+        \Magento\Catalog\Model\Layer\FilterList $filterList,
+        \Magento\Catalog\Model\Layer\AvailabilityFlagInterface $visibilityFlag,
+        \Magento\Framework\ObjectManagerInterface $objectManager,
+        \Magento\Framework\Module\Manager $moduleManager,
         array $data
     ) {
-        $this->objectManager = $objectManager;
-        $this->moduleManager = $moduleManager;
-
         parent::__construct($context, $layerResolver, $filterList, $visibilityFlag, $data);
+        $this->pageLayout         = $context->getPageConfig()->getPageLayout() ?: $this->getLayout()->getUpdate()->getPageLayout();
+        $this->objectManager      = $objectManager;
+        $this->moduleManager      = $moduleManager;
     }
 
     /**
@@ -75,56 +80,81 @@ class Navigation extends \Magento\LayeredNavigation\Block\Navigation
      */
     public function canShowBlock()
     {
+        $canShowBlock = parent::canShowBlock();
+
         if ($this->moduleManager->isEnabled('Magento_Staging')) {
             try {
                 $versionManager = $this->objectManager->get('\Magento\Staging\Model\VersionManager');
 
-                return parent::canShowBlock() && !$versionManager->isPreviewVersion();
+                $canShowBlock = $canShowBlock && !$versionManager->isPreviewVersion();
             } catch (\Exception $exception) {
-                return parent::canShowBlock();
+                ;
             }
         }
 
-        return parent::canShowBlock();
+        if ($this->getLayer() instanceof \Magento\Catalog\Model\Layer\Category &&
+            $this->getLayer()->getCurrentCategory()->getDisplayMode() === \Magento\Catalog\Model\Category::DM_PAGE) {
+            $canShowBlock = false;
+        }
+
+        return $canShowBlock;
     }
 
     /**
-     * @SuppressWarnings(PHPMD.CamelCaseMethodName)
+     * Return index of the facets that are expanded for the current page :
      *
-     * {@inheritDoc}
-     */
-    protected function _prepareLayout()
-    {
-        parent::_prepareLayout();
-        $this->addFacets();
-
-        return $this;
-    }
-
-    /**
-     * Append facets to the search requests using the coverage rate defined in admin.
+     *  - nth first facets (depending of config)
+     *  - facets with at least one selected filter
      *
-     * @return void
+     * @return string
      */
-    private function addFacets()
+    public function getActiveFilters()
     {
-        $productCollection = $this->getLayer()->getProductCollection();
-        $countBySetId      = $productCollection->getProductCountByAttributeSetId();
-        $totalCount        = $productCollection->getSize();
+        $activeFilters = [];
 
-        foreach ($this->filterList->getFilters($this->_catalogLayer) as $filter) {
-            try {
-                $attribute                = $filter->getAttributeModel();
-                $facetCoverageRate        = $attribute->getFacetMinCoverageRate();
-                $attributeCountCandidates = array_sum(array_intersect_key($countBySetId, $attribute->getAttributeSetInfo()));
-                $currentCoverageRate      = $attributeCountCandidates / $totalCount * 100;
+        if (!$this->isInline()) {
+            $requestParams    = array_keys($this->getRequest()->getParams());
+            $displayedFilters = $this->getDisplayedFilters();
+            $expandedFacets   = $this->_scopeConfig->getValue(self::DEFAULT_EXPANDED_FACETS_COUNT_CONFIG_XML_PATH);
+            $activeFilters    = [];
+            if ($expandedFacets > 0) {
+                $activeFilters = range(0, min(count($displayedFilters), $expandedFacets) - 1);
+            }
 
-                if ($facetCoverageRate < $currentCoverageRate) {
-                    $filter->addFacetToCollection();
+            foreach ($displayedFilters as $index => $filter) {
+                if (in_array($filter->getRequestVar(), $requestParams)) {
+                    $activeFilters[] = $index;
                 }
-            } catch (\Exception $e) {
-                $filter->addFacetToCollection();
             }
         }
+
+        return json_encode($activeFilters);
+    }
+
+    /**
+     * Returns facet that are displayed.
+     *
+     * @return array
+     */
+    public function getDisplayedFilters()
+    {
+        $displayedFilters = array_filter(
+            $this->getFilters(),
+            function ($filter) {
+                return $filter->getItemsCount() > 0;
+            }
+        );
+
+        return array_values($displayedFilters);
+    }
+
+    /**
+     * Indicates if the block is displayed inline or not.
+     *
+     * @return boolean
+     */
+    public function isInline()
+    {
+        return in_array($this->pageLayout, $this->inlineLayouts);
     }
 }

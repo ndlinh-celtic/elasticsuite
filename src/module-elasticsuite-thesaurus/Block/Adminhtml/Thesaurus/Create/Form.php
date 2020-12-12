@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteThesaurus
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteThesaurus\Block\Adminhtml\Thesaurus\Create;
@@ -63,8 +64,8 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
             'select',
             [
                 'name' => 'type',
-                'label' => __('Thesarurus Type'),
-                'title' => __('Thesarurus Type'),
+                'label' => __('Thesaurus Type'),
+                'title' => __('Thesaurus Type'),
                 'values' => $thesaurusTypes,
             ]
         );

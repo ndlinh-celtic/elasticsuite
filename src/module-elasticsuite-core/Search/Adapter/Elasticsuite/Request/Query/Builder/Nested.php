@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -31,13 +31,21 @@ class Nested extends AbstractComplexBuilder implements BuilderInterface
      */
     public function buildQuery(QueryInterface $query)
     {
-        $searchQuery = [
+        if ($query->getType() !== QueryInterface::TYPE_NESTED) {
+            throw new \InvalidArgumentException("Query builder : invalid query type {$query->getType()}");
+        }
+
+        $queryParams = [
             'path'       => $query->getPath(),
             'score_mode' => $query->getScoreMode(),
             'query'      => $this->parentBuilder->buildQuery($query->getQuery()),
             'boost'      => $query->getBoost(),
         ];
 
-        return ['nested' => $searchQuery];
+        if ($query->getName()) {
+            $queryParams['_name'] = $query->getName();
+        }
+
+        return ['nested' => $queryParams];
     }
 }

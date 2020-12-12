@@ -2,13 +2,13 @@
 /**
  * DISCLAIMER
  *
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCore
  * @author    Aurelien FOUCRET <aurelien.foucret@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 
@@ -49,6 +49,7 @@ class Nested extends Standard
      * @param QueryInterface $nestedFilter The filter applied to the nested sort.
      * @param string         $scoreMode    Method used to aggregate the sort if there is many match for the filter.
      * @param string         $name         Sort order name.
+     * @param string         $missing      How to treat missing values.
      */
     public function __construct(
         $field,
@@ -56,9 +57,11 @@ class Nested extends Standard
         $nestedPath,
         QueryInterface $nestedFilter = null,
         $scoreMode = self::SCORE_MODE_MIN,
-        $name = null
+        $name = null,
+        $missing = null
     ) {
-        parent::__construct($field, $direction, $name);
+        parent::__construct($field, $direction, $name, $missing);
+
         $this->nestedFilter = $nestedFilter;
         $this->nestedPath   = $nestedPath;
         $this->scoreMode    = $scoreMode;

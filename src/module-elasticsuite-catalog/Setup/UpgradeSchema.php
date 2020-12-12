@@ -1,13 +1,14 @@
 <?php
 /**
  * DISCLAIMER
- * Do not edit or add to this file if you wish to upgrade Smile Elastic Suite to newer
+ *
+ * Do not edit or add to this file if you wish to upgrade Smile ElasticSuite to newer
  * versions in the future.
  *
  * @category  Smile
  * @package   Smile\ElasticsuiteCatalog
  * @author    Romain Ruaud <romain.ruaud@smile.fr>
- * @copyright 2016 Smile
+ * @copyright 2020 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
 namespace Smile\ElasticsuiteCatalog\Setup;
@@ -26,6 +27,21 @@ use Magento\Framework\Setup\SchemaSetupInterface;
 class UpgradeSchema implements UpgradeSchemaInterface
 {
     /**
+     * @var \Smile\ElasticsuiteCatalog\Setup\CatalogSetup
+     */
+    private $catalogSetup;
+
+    /**
+     * InstallSchema constructor.
+     *
+     * @param \Smile\ElasticsuiteCatalog\Setup\CatalogSetupFactory $catalogSetupFactory ElasticsuiteCatalog Setup.
+     */
+    public function __construct(CatalogSetupFactory $catalogSetupFactory)
+    {
+        $this->catalogSetup = $catalogSetupFactory->create();
+    }
+
+    /**
      * Installs DB schema for a module
      *
      * @param SchemaSetupInterface   $setup   Setup
@@ -40,45 +56,30 @@ class UpgradeSchema implements UpgradeSchemaInterface
         $setup->startSetup();
 
         if (version_compare($context->getVersion(), '1.1.0', '<')) {
-            $this->appendDecimalDisplayConfiguration($setup);
+            $this->catalogSetup->appendDecimalDisplayConfiguration($setup);
+        }
+
+        if (version_compare($context->getVersion(), '1.2.2', '<')) {
+            $this->catalogSetup->removeIsUsedInAutocompleteField($setup);
+        }
+
+        if (version_compare($context->getVersion(), '1.3.0', '<')) {
+            $this->catalogSetup->createCategoryFacetConfigurationTable($setup);
+        }
+
+        if (version_compare($context->getVersion(), '1.4.0', '<')) {
+            $this->catalogSetup->createSearchPositionTable($setup);
+        }
+
+        if (version_compare($context->getVersion(), '1.5.0', '<')) {
+            $this->catalogSetup->addBlacklistColumnToSearchPositionTable($setup);
+            $this->catalogSetup->setNullablePositionColumn($setup);
+        }
+
+        if (version_compare($context->getVersion(), '1.5.1', '<')) {
+            $this->catalogSetup->addSortOrderMissingFields($setup);
         }
 
         $setup->endSetup();
-    }
-
-    /**
-     * Append decimal display related columns to attribute table
-     *
-     * @param \Magento\Framework\Setup\SchemaSetupInterface $setup The setup instance
-     */
-    private function appendDecimalDisplayConfiguration(SchemaSetupInterface $setup)
-    {
-        $connection = $setup->getConnection();
-        $table      = $setup->getTable('catalog_eav_attribute');
-
-        // Append a column 'display_pattern' into the db.
-        $connection->addColumn(
-            $table,
-            'display_pattern',
-            [
-                'type'     => \Magento\Framework\DB\Ddl\Table::TYPE_TEXT,
-                'nullable' => true,
-                'default'  => null,
-                'length'   => 10,
-                'comment'  => 'The pattern to display facet values',
-            ]
-        );
-
-        // Append a column 'display_precision' into the db.
-        $connection->addColumn(
-            $table,
-            'display_precision',
-            [
-                'type'     => \Magento\Framework\DB\Ddl\Table::TYPE_INTEGER,
-                'nullable' => true,
-                'default'  => 0,
-                'comment'  => 'Attribute decimal precision for display',
-            ]
-        );
     }
 }

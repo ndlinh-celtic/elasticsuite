@@ -5,13 +5,14 @@ Thesaurus,Thesaurus
 Synonym,Synonym
 Expansion,Expansion
 Type,Type
-"Thesarurus Type","Thesarurus Type"
+"Thesaurus Type","Thesaurus Type"
 "Save Thesaurus","Save Thesaurus"
 "Save and Continue Edit","Save and Continue Edit"
 "Delete Thesaurus","Delete Thesaurus"
 "Edit a Thesaurus","Edit a Thesaurus"
 "General Information","General Information"
 "Thesaurus Name","Thesaurus Name"
+Active,Active
 Store,Store
 "Bag of words","Bag of words"
 Synonyms,Synonyms
@@ -28,13 +29,13 @@ Synonyms,Synonyms
 "Please select searches.","Please select searches."
 "Total of %1 record(s) were deleted.","Total of %1 record(s) were deleted."
 "You saved the thesaurus %1.","You saved the thesaurus %1."
-"Thesaurus configuration","Thesaurus configuration"
-"Synonyms configuration","Synonyms configuration"
-"Enable synonyms search","Enable synonyms search"
-"Synonyms weight divider","Synonyms weight divider"
-"Query expansions configuration","Query expansions configuration"
-"Enable search expansions","Enable search expansions"
-"Concepts weight divider","Concepts weight divider"
+"Thesaurus Configuration","Thesaurus Configuration"
+"Synonyms Configuration","Synonyms Configuration"
+"Enable Synonyms Search","Enable Synonyms Search"
+"Synonyms Weight Divider","Synonyms Weight Divider"
+"Query Expansions Configuration","Query Expansions Configuration"
+"Enable Search Expansions","Enable Search Expansions"
+"Concepts Weight Divider","Concepts Weight Divider"
 "ElasticSuite Thesaurus Indexing","ElasticSuite Thesaurus Indexing"
 "Reindex ElasticSuite search engine thesaurus.","Reindex ElasticSuite search engine thesaurus."
 Delete,Delete
@@ -42,7 +43,7 @@ Delete,Delete
 Name,Name
 Expansions,Expansions
 Terms,Terms
+Status,Status
+Inactive,Inactive
 Action,Action
 Edit,Edit
-Active,Active
-Inactive,Inactive
